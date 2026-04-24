@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      nightly:
+        description: 'nightly'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  build-windows:
+    name: build-windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip' 
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -U "https://github.com/yt-dlp/Pyinstaller-Builds/releases/download/2025.09.13.221251/pyinstaller-6.16.0-py3-none-win_amd64.whl"
+
+      - name: Set version
+        working-directory: ./app
+        shell: bash
+        run: |
+          short_sha=$(git rev-parse --short HEAD)
+          current_date=$(date +%Y.%m.%d)
+
+          if [[ "${{ github.event.inputs.nightly }}" == 'true' ]]; then
+            version=$short_sha
+          else
+            version=$current_date
+          fi
+
+          sed -i "s/^__version__.*/__version__ = \"$version\"/" ./app.py
+
+          echo "Date $current_date"
+          echo "SHA $short_sha"
+          echo "version $version"
+
+          echo "TAG_NAME=$version" >> $GITHUB_ENV
+          echo "SHORT_SHA=$short_sha" >> $GITHUB_ENV
+          echo "CURRENT_DATE=$current_date" >> $GITHUB_ENV
+
+      - name: Build application
+        working-directory: ./app
+        run: |
+          pyinstaller --name=yt-dlp-gui --clean -y app.py --icon ./assets/yt-dlp-gui.ico --add-data "config.toml;." --add-data "assets;assets" --noconsole
+          Compress-Archive -Path dist/* -DestinationPath ./yt-dlp-gui-win64.zip
+
+      - uses: softprops/action-gh-release@v2
+        if: ${{ github.event.inputs.nightly == 'true' }}
+        with:
+          tag_name: nightly
+          body: nightly build - ${{ env.CURRENT_DATE }} - [${{ env.SHORT_SHA }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          generate_release_notes: false
+          draft: false
+          prerelease: true
+          files: |
+            ./app/yt-dlp-gui-win64.zip
+            
+      - uses: softprops/action-gh-release@v2
+        if: ${{ github.event.inputs.nightly == 'false' }}
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            ./app/yt-dlp-gui-win64.zip
