@@ -76,7 +76,18 @@ jobs:
         working-directory: ./app
         shell: bash
         run: |
-          pyinstaller --clean -y yt-dlp-gui.spec
+          pyinstaller --name=yt-dlp-gui --onefile --windowed \
+            --icon=assets/yt-dlp-gui.ico \
+            --add-data="assets;assets" \
+            --add-data="config.toml;root" \
+            --hidden-import=httpx \
+            --hidden-import=anyio \
+            --hidden-import=charset_normalizer \
+            --hidden-import=certifi \
+            --hidden-import=platformdirs \
+            --hidden-import=httpx_sse \
+            --hidden-import=qtawesome \
+            app.py --distpath=dist --noconfirm
 
       - name: Package for distribution
         working-directory: ./app
