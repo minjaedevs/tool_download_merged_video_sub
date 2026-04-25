@@ -86,7 +86,8 @@ jobs:
             --hidden-import=certifi \
             --hidden-import=platformdirs \
             --hidden-import=httpx_sse \
-            --hidden-import=qtawesome \
+            --collect-all=qtawesome \
+            --noupx \
             app.py --distpath=dist --noconfirm
 
       - name: Package for distribution
