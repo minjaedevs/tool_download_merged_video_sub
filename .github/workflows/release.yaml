@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       nightly:
-        description: 'nightly'
+        description: 'nightly build'
         type: boolean
         default: false
 
@@ -25,15 +25,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: 'pip' 
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           pip install -U "https://github.com/yt-dlp/Pyinstaller-Builds/releases/download/2025.09.13.221251/pyinstaller-6.16.0-py3-none-win_amd64.whl"
 
-      - name: Set version
-        working-directory: ./app
+      - name: Determine version
+        id: version
         shell: bash
         run: |
           short_sha=$(git rev-parse --short HEAD)
@@ -45,39 +45,78 @@ jobs:
             version=$current_date
           fi
 
-          sed -i "s/^__version__.*/__version__ = \"$version\"/" ./app.py
+          echo "Version: $version"
+          echo "short_sha=$short_sha" >> $GITHUB_OUTPUT
+          echo "version=$version"       >> $GITHUB_OUTPUT
+          echo "short_date=$current_date" >> $GITHUB_OUTPUT
 
-          echo "Date $current_date"
-          echo "SHA $short_sha"
-          echo "version $version"
+      - name: Patch version strings
+        working-directory: ./app
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          github_repo="${{ github.repository }}"
 
-          echo "TAG_NAME=$version" >> $GITHUB_ENV
-          echo "SHORT_SHA=$short_sha" >> $GITHUB_ENV
-          echo "CURRENT_DATE=$current_date" >> $GITHUB_ENV
+          # Update __version__ in app.py (used in UI: about dialog, help dialog)
+          sed -i "s/^__version__ = .*/__version__ = \"${version}\"/" ./app.py
+
+          # Update __version__ in _version.py (used by the updater)
+          sed -i "s/^__version__ = .*/__version__ = \"${version}\"/" ./_version.py
+
+          echo "Patched app.py     -> __version__ = \"${version}\""
+          echo "Patched _version.py -> __version__ = \"${version}\""
 
       - name: Build application
         working-directory: ./app
+        shell: bash
         run: |
-          pyinstaller --name=yt-dlp-gui --clean -y app.py --icon ./assets/yt-dlp-gui.ico --add-data "config.toml;." --add-data "assets;assets" --noconsole
-          Compress-Archive -Path dist/* -DestinationPath ./yt-dlp-gui-win64.zip
+          pyinstaller --name=yt-dlp-gui --clean -y app.py \
+            --icon ./assets/yt-dlp-gui.ico \
+            --add-data "config.toml;." \
+            --add-data "assets;assets" \
+            --noconsole
 
-      - uses: softprops/action-gh-release@v2
+      - name: Package for distribution
+        working-directory: ./app
+        shell: bash
+        run: |
+          # Create zip (for manual download)
+          Compress-Archive -Path dist/yt-dlp-gui/* -DestinationPath ./yt-dlp-gui-win64.zip
+
+          # Create a directory for release assets
+          mkdir -p release-assets
+          # Copy the standalone .exe so it can be uploaded as a release asset
+          cp dist/yt-dlp-gui/yt-dlp-gui.exe release-assets/
+
+          echo "=== dist/yt-dlp-gui/ contents ==="
+          ls -la dist/yt-dlp-gui/
+
+      - name: Upload nightly release
         if: ${{ github.event.inputs.nightly == 'true' }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: nightly
-          body: nightly build - ${{ env.CURRENT_DATE }} - [${{ env.SHORT_SHA }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          body: |
+            Nightly build – ${{ steps.version.outputs.short_date }} – `[${{ steps.version.outputs.short_sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})`
           generate_release_notes: false
           draft: false
           prerelease: true
           files: |
-            ./app/yt-dlp-gui-win64.zip
-            
-      - uses: softprops/action-gh-release@v2
+            app/yt-dlp-gui-win64.zip
+            app/release-assets/yt-dlp-gui.exe
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Upload production release
         if: ${{ github.event.inputs.nightly == 'false' }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TAG_NAME }}
+          tag_name: ${{ steps.version.outputs.version }}
           generate_release_notes: true
           draft: false
           prerelease: false
           files: |
-            ./app/yt-dlp-gui-win64.zip
+            app/yt-dlp-gui-win64.zip
+            app/release-assets/yt-dlp-gui.exe
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
