@@ -19,6 +19,7 @@ import requests
 import tomlkit
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import QMessageBox, QProgressDialog
+from utils import BIN_DIR, ROOT
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -45,12 +46,14 @@ def _get_version() -> str:
 def _get_github_repo() -> str | None:
     """Read github_repo from config.toml, return None if absent."""
     try:
-        bin_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
-        config_path = bin_dir / "config.toml"
-        if not config_path.exists():
-            return None
-        cfg = tomlkit.parse(config_path.read_text(encoding="utf-8"))
-        return cfg.get("update", {}).get("github_repo") or cfg.get("general", {}).get("github_repo")
+        for path in (ROOT / "root", BIN_DIR):
+            config_path = path / "config.toml"
+            if config_path.exists():
+                cfg = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+                repo = cfg.get("update", {}).get("github_repo") or cfg.get("general", {}).get("github_repo")
+                if repo:
+                    return repo
+        return None
     except Exception:
         return None
 
