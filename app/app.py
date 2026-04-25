@@ -517,6 +517,463 @@ def _ns_load_bundled_fonts(fonts_dir: Path) -> list[str]:
 # ============================================================================
 
 
+def _ns_analyze_vtt(vtt_path: Path) -> dict:
+    """Parse a VTT file and return analysis: total cues and short-cue candidates.
+
+    A "short cue" is a subtitle line with 1-6 words that may need to be
+    merged with adjacent cues because the original cut leaves very brief
+    fragments (common when the source is segmented).
+
+    Returns:
+        dict with keys: total (int), short (int), total_subs (int)
+    """
+    try:
+        content = vtt_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return {"total": 0, "short": 0, "total_subs": 0}
+
+    cue_blocks = re.split(r"\n\n+", content.strip())
+    total = 0
+    short = 0
+    total_subs = 0
+
+    for block in cue_blocks:
+        lines = block.strip().splitlines()
+        if len(lines) < 2:
+            continue
+        ts_match = re.search(
+            r"(\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3})",
+            lines[0],
+        )
+        if not ts_match:
+            continue
+        total += 1
+        sub_lines = [
+            l.strip()
+            for l in lines[1:]
+            if l.strip()
+            and not l.strip().startswith(("WEBVTT", "NOTE", "STYLE"))
+        ]
+        for l in sub_lines:
+            total_subs += 1
+            if 1 <= len(l.split()) <= 6:
+                short += 1
+                break
+
+    return {"total": total, "short": short, "total_subs": total_subs}
+
+
+# ============================================================================
+# NS DETAIL DIALOG
+# ============================================================================
+
+
+def _ns_get_video_duration(path: Path) -> Optional[str]:
+    """Get video duration using ffprobe. Returns HH:MM:SS string or None on failure."""
+    try:
+        result = sp.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            secs = float(result.stdout.strip())
+            h = int(secs // 3600)
+            m = int((secs % 3600) // 60)
+            s = int(secs % 60)
+            return f"{h:02d}:{m:02d}:{s:02d}"
+    except Exception:
+        pass
+    return None
+
+
+# ============================================================================
+# NS DETAIL DIALOG
+# ============================================================================
+
+class NSDetailDialog(QtWidgets.QDialog):
+    """Dialog showing per-episode details: tập phim, video gốc, VTT, video merged, báo cáo."""
+
+    def __init__(self, movie: NSMovie, parent=None):
+        super().__init__(parent)
+        self.movie = movie
+        self.setWindowTitle(f"Chi tiết - {movie.name}")
+        self.resize(900, 600)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Header
+        header = QtWidgets.QLabel(
+            f"<b>{movie.name}</b> — {movie.selected_count}/{movie.total} tập được chọn"
+        )
+        layout.addWidget(header)
+
+        # Table: 5 columns
+        self.table = QtWidgets.QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(
+            ["Tập", "Video gốc", "VTT", "Video Merged", "Báo cáo"]
+        )
+        self.table.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QtWidgets.QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setWordWrap(True)
+        layout.addWidget(self.table)
+
+        # Button row
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QtWidgets.QPushButton("Đóng")
+        close_btn.clicked.connect(self.close)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        self._populate()
+        QtCore.QTimer.singleShot(0, self._resize_rows)
+
+    def _populate(self):
+        """Fill table rows for each episode."""
+        for ep in self.movie.episodes:
+            if not ep.selected:
+                continue
+            self._add_episode_row(ep)
+
+    def _resize_rows(self):
+        """Resize table rows to fit wrapped content after the table is shown."""
+        self.table.resizeRowsToContents()
+
+    def _add_episode_row(self, ep: NSEpisode):
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+
+        # Col 0: Tập
+        label = f"Tập {ep.episode}"
+        if ep.name and ep.name != self.movie.name:
+            label += f" - {ep.name}"
+        self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(label))
+
+        # Col 1: Video gốc
+        video_item = QtWidgets.QTableWidgetItem("")
+        if ep.video_path and ep.video_path.exists():
+            video_item.setText(ep.video_path.name)
+            video_item.setData(QtCore.Qt.ItemDataRole.UserRole, str(ep.video_path))
+            video_item.setForeground(QtGui.QBrush(QtGui.QColor("#16a34a")))
+        self.table.setItem(row, 1, video_item)
+
+        # Col 2: VTT
+        vtt_item = QtWidgets.QTableWidgetItem("")
+        if ep.sub_path and ep.sub_path.exists():
+            vtt_item.setText(ep.sub_path.name)
+            vtt_item.setData(QtCore.Qt.ItemDataRole.UserRole, str(ep.sub_path))
+            video_ok = ep.video_path and ep.video_path.exists()
+            color = "#16a34a" if video_ok else "#d97706"
+            vtt_item.setForeground(QtGui.QBrush(QtGui.QColor(color)))
+        self.table.setItem(row, 2, vtt_item)
+
+        # Col 3: Video Merged
+        merged_item = QtWidgets.QTableWidgetItem("")
+        if ep.merged_path and ep.merged_path.exists():
+            merged_item.setText(ep.merged_path.name)
+            merged_item.setData(QtCore.Qt.ItemDataRole.UserRole, str(ep.merged_path))
+            merged_item.setForeground(QtGui.QBrush(QtGui.QColor("#16a34a")))
+        self.table.setItem(row, 3, merged_item)
+
+        # Col 4: Báo cáo
+        report = self._build_report(ep)
+        self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(report))
+
+    def _build_report(self, ep: NSEpisode) -> str:
+        """Build a report string comparing video durations and VTT subtitle analysis."""
+        orig_dur = None
+        merged_dur = None
+        if ep.video_path and ep.video_path.exists():
+            orig_dur = _ns_get_video_duration(ep.video_path)
+        if ep.merged_path and ep.merged_path.exists():
+            merged_dur = _ns_get_video_duration(ep.merged_path)
+
+        # Duration comparison
+        dur_label = "—"
+        dur_detail = ""
+        if orig_dur and merged_dur:
+            try:
+                orig_secs = sum(int(x) * 60**i for i, x in enumerate(reversed(orig_dur.split(":"))))
+                merged_secs = sum(int(x) * 60**i for i, x in enumerate(reversed(merged_dur.split(":"))))
+                diff = abs(merged_secs - orig_secs)
+                if diff <= 2:
+                    dur_label = "OK"
+                else:
+                    dur_label = "⚠ Chênh lệch"
+                dur_detail = f" | Gốc: {orig_dur} | Merge: {merged_dur}"
+            except Exception:
+                dur_label = "?"
+                dur_detail = f" | Gốc: {orig_dur} | Merge: {merged_dur}"
+        elif merged_dur:
+            dur_label = "?"
+            dur_detail = f" | Merge: {merged_dur}"
+        elif orig_dur:
+            dur_label = "⚠ Chưa merge"
+            dur_detail = f" | Gốc: {orig_dur}"
+
+        # VTT analysis
+        vtt_label = ""
+        if ep.sub_path and ep.sub_path.exists():
+            analysis = _ns_analyze_vtt(ep.sub_path)
+            if analysis["total"] > 0:
+                vtt_label = f" | VTT: {analysis['total']} mốc"
+                if analysis["short"] > 0:
+                    vtt_label += f", ⚠ {analysis['short']} ngắn"
+
+        return f"{dur_label}{dur_detail}{vtt_label}"
+
+    def _get_parent_window(self) -> Optional[QtWidgets.QWidget]:
+        """Return the parent MainWindow for spawning sub-dialogs."""
+        p = self.parentWidget()
+        while p is not None:
+            if isinstance(p, QtWidgets.QMainWindow):
+                return p
+            p = p.parentWidget()
+        return None
+
+
+# ============================================================================
+# NS VTT EDITOR DIALOG
+# ============================================================================
+
+class NSVttEditorDialog(QtWidgets.QDialog):
+    """Dialog for editing a VTT subtitle file with search and analysis."""
+
+    def __init__(self, vtt_path: Path, parent=None):
+        super().__init__(parent)
+        self.vtt_path = vtt_path
+        self.setWindowTitle(f"Sửa VTT - {vtt_path.name}")
+        self.resize(800, 600)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Toolbar row
+        toolbar = QtWidgets.QHBoxLayout()
+        toolbar.addWidget(QtWidgets.QLabel("Tìm:"))
+        self.search_input = QtWidgets.QLineEdit()
+        self.search_input.setPlaceholderText("Tìm kiếm...")
+        self.search_input.textChanged.connect(self._on_search_changed)
+        toolbar.addWidget(self.search_input)
+        toolbar.addStretch()
+
+        self.analyze_btn = QtWidgets.QPushButton("Phân tích")
+        self.analyze_btn.setStyleSheet(
+            "QPushButton { background-color: #6366f1; color: white; padding: 4px 12px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #4f46e5; }"
+        )
+        self.analyze_btn.clicked.connect(self._analyze)
+        toolbar.addWidget(self.analyze_btn)
+        layout.addLayout(toolbar)
+
+        # Text editor
+        self.text_edit = QtWidgets.QTextEdit()
+        self.text_edit.setFont(QtGui.QFont("Consolas", 10))
+        try:
+            content = vtt_path.read_text(encoding="utf-8", errors="replace")
+            self.text_edit.setPlainText(content)
+        except Exception as e:
+            self.text_edit.setPlainText(f"# Không thể đọc file: {e}")
+        layout.addWidget(self.text_edit)
+
+        # Buttons
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addStretch()
+        save_btn = QtWidgets.QPushButton("Lưu")
+        save_btn.setStyleSheet(
+            "QPushButton { background-color: #10b981; color: white; padding: 6px 16px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #059669; }"
+        )
+        save_btn.clicked.connect(self._save)
+        btn_row.addWidget(save_btn)
+        cancel_btn = QtWidgets.QPushButton("Hủy")
+        cancel_btn.setStyleSheet(
+            "QPushButton { padding: 6px 16px; border-radius: 4px; font-weight: bold; }"
+        )
+        cancel_btn.clicked.connect(self.close)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+    def _on_search_changed(self, text: str):
+        """Clear old highlights first, then apply new ones immediately on each keystroke."""
+        self._clear_highlight()
+        if not text:
+            return
+        self._do_highlight(text)
+
+    def _clear_highlight(self):
+        """Reset all character formats to default."""
+        cursor = QtGui.QTextCursor(self.text_edit.document())
+        cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        fmt = QtGui.QTextCharFormat()
+        fmt.setBackground(QtGui.QBrush(QtCore.Qt.BrushStyle.NoBrush))
+        fmt.setForeground(QtGui.QBrush(QtCore.Qt.GlobalColor.black))
+        cursor.setCharFormat(fmt)
+        # Move cursor back to start so user sees top of document
+        cursor = QtGui.QTextCursor(self.text_edit.document())
+        cursor.movePosition(QtGui.QTextCursor.MoveOperation.Start)
+        self.text_edit.setTextCursor(cursor)
+
+    def _do_highlight(self, text: str):
+        """Highlight all occurrences of text."""
+        doc = self.text_edit.document()
+        cursor = QtGui.QTextCursor(doc)
+        cursor.movePosition(QtGui.QTextCursor.MoveOperation.Start)
+
+        highlight_fmt = QtGui.QTextCharFormat()
+        highlight_fmt.setBackground(QtGui.QBrush(QtGui.QColor("#fbbf24")))
+
+        while True:
+            finder = QtGui.QTextCursor(cursor)
+            finder = doc.find(text, finder)
+            if finder.isNull():
+                break
+            finder.setCharFormat(highlight_fmt)
+            if finder.position() == cursor.position():
+                cursor.setPosition(cursor.position() + 1)
+            else:
+                cursor = finder
+
+    def _analyze(self):
+        """Check all timestamps and show results in a dialog."""
+        content = self.text_edit.toPlainText()
+        QtWidgets.QApplication.processEvents()
+
+        found = []
+        cue_blocks = re.split(r"\n\n+", content)
+        for idx, block in enumerate(cue_blocks):
+            if idx % 200 == 0:
+                QtWidgets.QApplication.processEvents()
+            lines = block.strip().splitlines()
+            if len(lines) < 2:
+                continue
+            ts_line = lines[0]
+            match = re.search(
+                r"(\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3})",
+                ts_line,
+            )
+            if not match:
+                continue
+            ts_full = match.group(1)
+            sub_lines = [
+                l.strip()
+                for l in lines[1:]
+                if l.strip()
+                and not l.strip().startswith(("WEBVTT", "NOTE", "STYLE"))
+            ]
+            # Flag cue if at least one sub line has 1-6 words
+            short_lines = [l for l in sub_lines if 1 <= len(l.split()) <= 6]
+            if short_lines:
+                found.append(
+                    f"⏱ {ts_full}\n   Sub: {' | '.join(sub_lines)}"
+                )
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Kết quả phân tích VTT")
+        dlg.resize(650, 450)
+        dlg_layout = QtWidgets.QVBoxLayout(dlg)
+
+        if found:
+            header = QtWidgets.QLabel(f"⚠ Tìm thấy {len(found)} mốc có thể cần tách:")
+            header.setStyleSheet("color: #ef4444; font-weight: bold; font-size: 13px;")
+            dlg_layout.addWidget(header)
+            text_edit = QtWidgets.QTextEdit()
+            text_edit.setReadOnly(True)
+            text_edit.setFont(QtGui.QFont("Consolas", 10))
+            text_edit.setPlainText("\n\n".join(found))
+            dlg_layout.addWidget(text_edit)
+            if len(found) > 20:
+                more_lbl = QtWidgets.QLabel(f"... và {len(found) - 20} mốc khác")
+                more_lbl.setStyleSheet("color: #6b7280; font-style: italic;")
+                dlg_layout.addWidget(more_lbl)
+        else:
+            ok_lbl = QtWidgets.QLabel("✅ Không tìm thấy mốc nào cần tách.")
+            ok_lbl.setStyleSheet("color: #10b981; font-weight: bold; font-size: 14px;")
+            dlg_layout.addWidget(ok_lbl)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QtWidgets.QPushButton("Đóng")
+        close_btn.clicked.connect(dlg.close)
+        btn_row.addWidget(close_btn)
+        dlg_layout.addLayout(btn_row)
+        dlg.exec()
+
+    def _save(self):
+        """Save content back to the VTT file."""
+        try:
+            self.vtt_path.write_text(
+                self.text_edit.toPlainText(), encoding="utf-8"
+            )
+            QtWidgets.QMessageBox.information(
+                self, "Đã lưu", f"Đã lưu file:\n{self.vtt_path.name}"
+            )
+            self.close()
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self, "Lỗi lưu file", f"Không thể lưu file:\n{e}"
+            )
+
+
+# ============================================================================
+# NS VIDEO POPUP (simple info popup)
+# ============================================================================
+
+class NSVideoPopup(QtWidgets.QDialog):
+    """Simple popup showing video file info and open button."""
+
+    def __init__(self, video_path: Path, parent=None):
+        super().__init__(parent)
+        self.video_path = video_path
+        size = video_path.stat().st_size
+        size_str = f"{size / (1024*1024):.1f} MB"
+        duration = _ns_get_video_duration(video_path) or "N/A"
+
+        self.setWindowTitle(f"Video - {video_path.name}")
+        self.setMinimumWidth(400)
+        layout = QtWidgets.QVBoxLayout(self)
+
+        info = QtWidgets.QLabel()
+        info.setText(
+            f"<b>File:</b> {video_path.name}<br>"
+            f"<b>Path:</b> {video_path}<br>"
+            f"<b>Size:</b> {size_str}<br>"
+            f"<b>Duration:</b> {duration}"
+        )
+        info.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse)
+        layout.addWidget(info)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        open_btn = QtWidgets.QPushButton("Mở file")
+        open_btn.clicked.connect(self._open_file)
+        btn_row.addWidget(open_btn)
+        btn_row.addStretch()
+        close_btn = QtWidgets.QPushButton("Đóng")
+        close_btn.clicked.connect(self.close)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _open_file(self):
+        try:
+            os.startfile(self.video_path)
+        except Exception:
+            try:
+                sp.Popen(["xdg-open", str(self.video_path)])
+            except Exception:
+                QtWidgets.QMessageBox.warning(
+                    self, "Lỗi", "Không thể mở file."
+                )
+
+
 class NSFetchWorker(QtCore.QThread):
     """Background thread that fetches episode list from the API."""
 
@@ -1944,19 +2401,44 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         btn_layout.setSpacing(4)
 
         open_btn = QtWidgets.QPushButton("Mở thư mục")
+        open_btn.setStyleSheet(
+            "QPushButton { background-color: #3b82f6; color: white; padding: 4px 8px; "
+            "border-radius: 4px; font-weight: bold; font-size: 12px; }"
+            "QPushButton:hover { background-color: #2563eb; }"
+        )
         open_btn.setToolTip("Mở thư mục chứa video")
         open_btn.clicked.connect(lambda _, m=movie: self._ns_open_movie_folder(m))
         btn_layout.addWidget(open_btn)
 
         open_merged_btn = QtWidgets.QPushButton("Mở merged")
+        open_merged_btn.setStyleSheet(
+            "QPushButton { background-color: #8b5cf6; color: white; padding: 4px 8px; "
+            "border-radius: 4px; font-weight: bold; font-size: 12px; }"
+            "QPushButton:hover { background-color: #7c3aed; }"
+        )
         open_merged_btn.setToolTip("Mở thư mục merged/")
         open_merged_btn.clicked.connect(lambda _, m=movie: self._ns_open_merged_folder(m))
         btn_layout.addWidget(open_merged_btn)
 
         remerge_btn = QtWidgets.QPushButton("Merge lại")
+        remerge_btn.setStyleSheet(
+            "QPushButton { background-color: #f59e0b; color: white; padding: 4px 8px; "
+            "border-radius: 4px; font-weight: bold; font-size: 12px; }"
+            "QPushButton:hover { background-color: #d97706; }"
+        )
         remerge_btn.setToolTip("Xóa file merged cũ và hardcode sub lại")
         remerge_btn.clicked.connect(lambda _, m=movie: self._ns_remerge_movie(m))
         btn_layout.addWidget(remerge_btn)
+
+        detail_btn = QtWidgets.QPushButton("Chi tiết")
+        detail_btn.setStyleSheet(
+            "QPushButton { background-color: #10b981; color: white; padding: 4px 8px; "
+            "border-radius: 4px; font-weight: bold; font-size: 12px; }"
+            "QPushButton:hover { background-color: #059669; }"
+        )
+        detail_btn.setToolTip("Xem chi tiết từng tập")
+        detail_btn.clicked.connect(lambda _, m=movie: self._ns_show_detail(m))
+        btn_layout.addWidget(detail_btn)
 
         movie.remerge_btn = remerge_btn
         self.ns_table.setCellWidget(row, 4, btn_widget)
@@ -2152,6 +2634,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         iterator = self._ns_iterator
         self._ns_iterator = None
         self._ns_run_next_movie(iterator)
+
+    def _ns_show_detail(self, movie: NSMovie):
+        """Open the NSDetailDialog for the given movie."""
+        dlg = NSDetailDialog(movie, self)
+        dlg.table.cellDoubleClicked.connect(
+            lambda row, col: self._ns_detail_cell_clicked(movie, row, col, dlg)
+        )
+        dlg.exec()
+
+    def _ns_detail_cell_clicked(self, movie: NSMovie, row: int, col: int, dlg: NSDetailDialog):
+        """Handle double-click on a detail table cell."""
+        item = dlg.table.item(row, col)
+        if item is None:
+            return
+        path_str = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        if not path_str:
+            return
+        path = Path(path_str)
+        if not path.exists():
+            return
+
+        if col == 1 or col == 3:
+            # Video gốc hoặc Video Merged — mở popup info
+            NSVideoPopup(path, dlg).exec()
+        elif col == 2:
+            # VTT — mở editor
+            NSVttEditorDialog(path, dlg).exec()
 
     def _ns_on_stop(self):
         """Signal the active worker to stop and reset the UI button states."""
