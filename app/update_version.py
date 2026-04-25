@@ -29,21 +29,16 @@ def _v(s: str) -> tuple[int, ...]:
 
 
 def _get_version() -> str:
-    """Return the current app version from _version.py."""
+    """Return the current app version.
+
+    Uses a direct import so it works in both dev mode and PyInstaller frozen
+    bundles (where _version.py is compiled into the exe, not copied as a text
+    file next to it).
+    """
     try:
-        bin_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
-        version_file = bin_dir / "_version.py"
-        if not version_file.exists():
-            return "1.0.0"
-        code = version_file.read_text(encoding="utf-8")
-        for line in code.splitlines():
-            line = line.strip()
-            if line.startswith("__version__"):
-                parts = line.split("=", 1)
-                if len(parts) == 2:
-                    return parts[1].strip().strip('"').strip("'")
-        return "1.0.0"
-    except Exception:
+        from _version import __version__
+        return __version__
+    except ImportError:
         return "1.0.0"
 
 
@@ -75,12 +70,29 @@ def _get_current_exe() -> Path:
 
 def _get_exe_name() -> str:
     """Return the .exe filename used in release assets."""
-    exe = _get_current_exe()
-    # In frozen mode, the exe name in the release should match the built name
-    return exe.name
+    return _get_current_exe().name
 
 
 # ── Workers ──────────────────────────────────────────────────────────────────
+
+
+class CheckWorker(QThread):
+    """Background thread that queries the GitHub releases API (non-blocking)."""
+
+    result = Signal(dict)
+    failed = Signal(str)
+
+    def __init__(self, api_url: str):
+        super().__init__()
+        self.api_url = api_url
+
+    def run(self):
+        try:
+            r = requests.get(self.api_url, timeout=15)
+            r.raise_for_status()
+            self.result.emit(r.json())
+        except Exception as e:
+            self.failed.emit(str(e))
 
 
 class DownloadWorker(QThread):
@@ -136,12 +148,13 @@ class Updater(QObject):
         super().__init__(parent)
         self.parent = parent
         self._progress_dlg: QProgressDialog | None = None
+        self._check_worker: CheckWorker | None = None
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def check(self, silent: bool = False) -> None:
         """
-        Check GitHub for a newer release.
+        Check GitHub for a newer release (non-blocking).
 
         Args:
             silent: If True, suppress the "already up-to-date" dialog.
@@ -157,58 +170,59 @@ class Updater(QObject):
                 )
             return
 
-        try:
-            r = requests.get(api_url, timeout=15)
-            r.raise_for_status()
-            data = r.json()
-
-            latest_tag: str = data.get("tag_name", "")
-            if not latest_tag:
-                return
-
-            current_ver = _get_version()
-            if _v(latest_tag) <= _v(current_ver):
-                if not silent:
-                    QMessageBox.information(
-                        self.parent, "Đã là bản mới nhất",
-                        f"Bạn đang dùng phiên bản mới nhất ({current_ver})."
-                    )
-                return
-
-            # Find the matching .exe asset
-            exe_name = _get_exe_name()
-            asset = next(
-                (a for a in data.get("assets", []) if a["name"] == exe_name),
-                None,
-            )
-            if not asset:
-                # Fallback: take the first .exe asset
-                asset = next(
-                    (a for a in data.get("assets", []) if a["name"].endswith(".exe")),
-                    None,
-                )
-            if not asset:
-                return
-
-            notes = data.get("body", "").strip()
-            ret = QMessageBox.question(
-                self.parent,
-                "Có bản cập nhật mới",
-                f"Phiên bản hiện tại: {current_ver}\n"
-                f"Phiên bản mới: {latest_tag}\n\n"
-                f"{notes[:500]}\n\nTải và cập nhật ngay?",
-            )
-            if ret == QMessageBox.Yes:
-                self._download(asset["browser_download_url"])
-
-        except Exception as e:
-            if not silent:
-                QMessageBox.warning(
-                    self.parent, "Lỗi",
-                    f"Không kiểm tra được bản cập nhật:\n{e}"
-                )
+        self._check_worker = CheckWorker(api_url)
+        self._check_worker.result.connect(lambda data: self._on_check_result(data, silent))
+        self._check_worker.failed.connect(lambda msg: self._on_check_failed(msg, silent))
+        self._check_worker.start()
 
     # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _on_check_result(self, data: dict, silent: bool) -> None:
+        latest_tag: str = data.get("tag_name", "")
+        if not latest_tag:
+            return
+
+        current_ver = _get_version()
+        if _v(latest_tag) <= _v(current_ver):
+            if not silent:
+                QMessageBox.information(
+                    self.parent, "Đã là bản mới nhất",
+                    f"Bạn đang dùng phiên bản mới nhất ({current_ver})."
+                )
+            return
+
+        # Find the matching .exe asset
+        exe_name = _get_exe_name()
+        asset = next(
+            (a for a in data.get("assets", []) if a["name"] == exe_name),
+            None,
+        )
+        if not asset:
+            # Fallback: take the first .exe asset
+            asset = next(
+                (a for a in data.get("assets", []) if a["name"].endswith(".exe")),
+                None,
+            )
+        if not asset:
+            return
+
+        notes = data.get("body", "").strip()
+        ret = QMessageBox.question(
+            self.parent,
+            "Có bản cập nhật mới",
+            f"Phiên bản hiện tại: {current_ver}\n"
+            f"Phiên bản mới: {latest_tag}\n\n"
+            f"{notes[:500]}\n\nTải và cập nhật ngay?",
+        )
+        if ret == QMessageBox.Yes:
+            self._download(asset["browser_download_url"])
+
+    def _on_check_failed(self, msg: str, silent: bool) -> None:
+        if not silent:
+            QMessageBox.warning(
+                self.parent, "Lỗi",
+                f"Không kiểm tra được bản cập nhật:\n{msg}"
+            )
 
     def _download(self, url: str) -> None:
         self._progress_dlg = QProgressDialog(

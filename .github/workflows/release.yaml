@@ -80,8 +80,8 @@ jobs:
         working-directory: ./app
         shell: bash
         run: |
-          # Create zip (for manual download)
-          Compress-Archive -Path dist/yt-dlp-gui/* -DestinationPath ./yt-dlp-gui-win64.zip
+          # Create zip (for manual download) — use bash zip, not PowerShell Compress-Archive
+          cd dist && zip -r ../yt-dlp-gui-win64.zip yt-dlp-gui/ && cd ..
 
           # Create a directory for release assets
           mkdir -p release-assets
