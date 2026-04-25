@@ -37,6 +37,16 @@ try:
 except ImportError:
     __version__ = "1.0.0"
 
+def _get_time_greeting() -> str:
+    """Return a Vietnamese greeting based on the current hour of day."""
+    h = time.localtime().tm_hour
+    if 5 <= h < 12:
+        return "Chào buổi sáng"
+    if 12 <= h < 18:
+        return "Chào buổi chiều"
+    return "Chào buổi tối"
+
+
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s %(levelname)s (%(module)s:%(lineno)d) %(message)s",
@@ -93,7 +103,7 @@ class SubViewerDialog(QtWidgets.QDialog):
     def __init__(self, srt_content: str, parent=None):
         """Build dialog UI and render the SRT content as coloured HTML."""
         super().__init__(parent)
-        self.setWindowTitle("Sub Title")
+        self.setWindowTitle("Phụ Đề")
         self.setMinimumSize(700, 500)
         self.resize(750, 550)
         self.setModal(False)
@@ -102,7 +112,7 @@ class SubViewerDialog(QtWidgets.QDialog):
 
         toolbar = QtWidgets.QHBoxLayout()
         self.search_input = QtWidgets.QLineEdit()
-        self.search_input.setPlaceholderText("Tim kiem...")
+        self.search_input.setPlaceholderText("Tìm kiếm...")
         self.search_input.textChanged.connect(self._do_search)
         self.btn_prev = QtWidgets.QPushButton("<")
         self.btn_prev.setFixedWidth(30)
@@ -111,7 +121,7 @@ class SubViewerDialog(QtWidgets.QDialog):
         self.btn_next.setFixedWidth(30)
         self.btn_next.clicked.connect(self._next_match)
         self.match_label = QtWidgets.QLabel("")
-        toolbar.addWidget(QtWidgets.QLabel("Tim:"))
+        toolbar.addWidget(QtWidgets.QLabel("Tìm:"))
         toolbar.addWidget(self.search_input)
         toolbar.addWidget(self.btn_prev)
         toolbar.addWidget(self.btn_next)
@@ -129,7 +139,7 @@ class SubViewerDialog(QtWidgets.QDialog):
         self.line_count_label = QtWidgets.QLabel("")
         self.line_count_label.setStyleSheet("color: #888; font-size: 11px")
         footer.addWidget(self.line_count_label)
-        btn_close = QtWidgets.QPushButton("Dong")
+        btn_close = QtWidgets.QPushButton("Đóng")
         btn_close.clicked.connect(self.close)
         footer.addStretch()
         footer.addWidget(btn_close)
@@ -571,7 +581,7 @@ class NSFetchWorker(QtCore.QThread):
         except json.JSONDecodeError as e:
             preview = raw[:200].decode("utf-8", errors="replace")
             self.error.emit(
-                f"JSON khong hop le: {e}\n"
+                f"JSON không hợp lệ: {e}\n"
                 f"Preview: {preview}"
             )
             return
@@ -580,8 +590,8 @@ class NSFetchWorker(QtCore.QThread):
         api_data = data.get("data") if isinstance(data, dict) else None
         if isinstance(api_data, str) and len(api_data) > 100:
             self.error.emit(
-                "API tra ve du lieu bi ma hoa.\n"
-                "Thu lai hoac dung 'Load JSON File' / 'Paste JSON'."
+                "API trả về dữ liệu bị mã hóa.\n"
+                "Thử lại hoặc dùng 'Load JSON File' / 'Paste JSON'."
             )
             return
 
@@ -650,7 +660,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
     def _download_file(self, url: str, output: Path, desc: str, retries: int = 3) -> bool:
         """Download a URL to a file with retry logic; skip if file already exists."""
         if output.exists() and output.stat().st_size > 1024:
-            self.log(f"SKIP {desc} (da ton tai)")
+            self.log(f"SKIP {desc} (đã tồn tại)")
             return True
 
         for attempt in range(1, retries + 1):
@@ -673,21 +683,21 @@ class NSDownloadMergeWorker(QtCore.QThread):
                     tmp.rename(output)
                 return True
             except requests.exceptions.Timeout:
-                self.log(f"TIMEOUT {desc} (thu {attempt}/{retries})")
+                self.log(f"TIMEOUT {desc} (thử {attempt}/{retries})")
                 if self._stop.is_set():
                     tmp.unlink(missing_ok=True)
                     return False
                 time.sleep(2 * attempt)
                 continue
             except requests.exceptions.ConnectionError as e:
-                self.log(f"ERR {desc} (thu {attempt}/{retries}): {e}")
+                self.log(f"LỖI {desc} (thử {attempt}/{retries}): {e}")
                 if self._stop.is_set():
                     tmp.unlink(missing_ok=True)
                     return False
                 time.sleep(2 * attempt)
                 continue
             except Exception as e:
-                self.log(f"ERR {desc} (thu {attempt}/{retries}): {e}")
+                self.log(f"LỖI {desc} (thử {attempt}/{retries}): {e}")
                 if self._stop.is_set():
                     tmp.unlink(missing_ok=True)
                     return False
@@ -709,14 +719,14 @@ class NSDownloadMergeWorker(QtCore.QThread):
         self.episode_status.emit(ep.episode, "downloading")
 
         video_path = folder / f"{base}.mp4"
-        dl_ok = self._download_file(ep.play, video_path, f"video tap {ep.episode}")
+        dl_ok = self._download_file(ep.play, video_path, f"video tập {ep.episode}")
 
         # If file already exists (skipped), still mark as downloaded so merge can run
         if video_path.exists() and video_path.stat().st_size > 1024 and ep.status != "error":
             ep.video_path = video_path
             ep.status = "downloaded"
             self.episode_status.emit(ep.episode, "downloaded")
-            self.log(f"SKIP video tap {ep.episode} (da ton tai)")
+            self.log(f"SKIP video tập {ep.episode} (đã tồn tại)")
         elif not dl_ok:
             ep.status = "error"
             ep.error_msg = "download video failed"
@@ -737,7 +747,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
             )
             if existing_sub:
                 ep.sub_path = existing_sub
-                self.log(f"SKIP sub tap {ep.episode} (da ton tai: {existing_sub.name})")
+                self.log(f"SKIP sub tập {ep.episode} (đã tồn tại: {existing_sub.name})")
             else:
                 try:
                     r = requests.get(ep.subtitle_url,
@@ -748,9 +758,9 @@ class NSDownloadMergeWorker(QtCore.QThread):
                     with open(sub_path, "wb") as f:
                         f.write(r.content)
                     ep.sub_path = sub_path
-                    self.log(f"sub tap {ep.episode} OK ({ext}, {len(r.content)} bytes)")
+                    self.log(f"sub tập {ep.episode} OK ({ext}, {len(r.content)} bytes)")
                 except Exception as e:
-                    self.log(f"sub tap {ep.episode} loi: {e}")
+                    self.log(f"sub tập {ep.episode} lỗi: {e}")
 
         ep.status = "downloaded"
         self.episode_status.emit(ep.episode, "downloaded")
@@ -775,20 +785,20 @@ class NSDownloadMergeWorker(QtCore.QThread):
                 ep.merged_path = out_path
                 ep.status = "done"
                 self.episode_status.emit(ep.episode, "done")
-                self.log(f"merge tap {ep.episode} SKIP (da ton tai)")
+                self.log(f"merge tập {ep.episode} SKIP (đã tồn tại)")
                 return True
-            self.log(f"tap {ep.episode}: sub moi hon merged -- re-merge...")
+            self.log(f"tập {ep.episode}: sub mới hơn merged -- re-merge...")
 
         if not ep.sub_path or not ep.sub_path.exists():
             shutil.copy2(ep.video_path, out_path)
             ep.merged_path = out_path
             ep.status = "done"
             self.episode_status.emit(ep.episode, "done")
-            self.log(f"tap {ep.episode} khong co sub -- copy video vao merged/")
+            self.log(f"tập {ep.episode} không có sub -- copy video vào merged/")
             return True
 
         self.episode_status.emit(ep.episode, "merging")
-        self.log(f"merge tap {ep.episode}...")
+        self.log(f"merge tập {ep.episode}...")
 
         ffmpeg_path = self._get_ffmpeg_path()
         if not ffmpeg_path:
@@ -816,7 +826,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
                 f"BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV={self.sub_margin_v}'"
             )
         else:
-            self.log("WARN: fonts/ dir not found, fallback to system fonts")
+            self.log("CẢNH BÁO: không tìm thấy thư mục fonts/ -- dùng font hệ thống")
             vf_filter = (
                 f"subtitles='{sub_filter}':force_style="
                 f"'FontName={self.sub_font},FontSize={self.sub_size},"
@@ -839,7 +849,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
         try:
             result = sp.run(cmd, capture_output=True, text=True, timeout=3600)
             if result.returncode != 0:
-                self.log(f"ffmpeg loi tap {ep.episode}: {result.stderr[:500]}")
+                self.log(f"ffmpeg lỗi tập {ep.episode}: {result.stderr[:500]}")
                 ep.status = "error"
                 ep.error_msg = "ffmpeg failed"
                 self.episode_status.emit(ep.episode, "error")
@@ -848,17 +858,17 @@ class NSDownloadMergeWorker(QtCore.QThread):
             ep.merged_path = out_path
             ep.status = "done"
             self.episode_status.emit(ep.episode, "done")
-            self.log(f"merge tap {ep.episode} OK -> {out_path.name}")
+            self.log(f"merge tập {ep.episode} OK -> {out_path.name}")
             return True
 
         except sp.TimeoutExpired:
-            self.log(f"merge tap {ep.episode} TIMEOUT")
+            self.log(f"merge tập {ep.episode} TIMEOUT")
             ep.status = "error"
             ep.error_msg = "merge timeout"
             self.episode_status.emit(ep.episode, "error")
             return False
         except Exception as e:
-            self.log(f"merge tap {ep.episode} exception: {e}")
+            self.log(f"merge tập {ep.episode} exception: {e}")
             ep.status = "error"
             ep.error_msg = str(e)
             self.episode_status.emit(ep.episode, "error")
@@ -869,12 +879,12 @@ class NSDownloadMergeWorker(QtCore.QThread):
         selected = [e for e in self.movie.episodes if e.selected]
         total = len(selected)
         if total == 0:
-            self.log("Khong co tap nao duoc chon.")
+            self.log("Không có tập nào được chọn.")
             self.finished_all.emit()
             return
 
-        self.log(f"=== Bat dau tai & merge '{self.movie.name}' ({total} tap) ===")
-        self.log(f"Thu muc: {self.movie.save_dir / self.movie.folder_name}")
+        self.log(f"=== Bắt đầu tải & merge '{self.movie.name}' ({total} tập) ===")
+        self.log(f"Thư mục: {self.movie.save_dir / self.movie.folder_name}")
         done = 0
 
         with ThreadPoolExecutor(max_workers=self.concurrency) as pool:
@@ -888,13 +898,13 @@ class NSDownloadMergeWorker(QtCore.QThread):
                 self.progress.emit(done, total * (2 if self.do_merge else 1))
 
         if self._stop.is_set():
-            self.log("Da dung.")
+            self.log("Đã dừng.")
             self.finished_all.emit()
             return
 
         if self.do_merge:
             if not _ns_check_ffmpeg():
-                self.log("CANH BAO: khong tim thay ffmpeg -- bo qua merge.")
+                self.log("CẢNH BÁO: không tìm thấy ffmpeg -- bỏ qua merge.")
             else:
                 for ep in selected:
                     if self._stop.is_set():
@@ -905,7 +915,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
                         done += 1
                         self.progress.emit(done, total * 2)
 
-        self.log(f"=== Hoan tat '{self.movie.name}' ===")
+        self.log(f"=== Hoàn tất '{self.movie.name}' ===")
         self.finished_all.emit()
 
 
@@ -921,19 +931,19 @@ class NSEpisodePickerDialog(QtWidgets.QDialog):
         """Build the episode checklist UI."""
         super().__init__(parent)
         self.episodes = episodes
-        self.setWindowTitle(f"Chon tap - {movie_name}")
+        self.setWindowTitle(f"Chọn tập - {movie_name}")
         self.resize(500, 600)
 
         layout = QtWidgets.QVBoxLayout(self)
 
         info = QtWidgets.QLabel(
-            f"<b>{movie_name}</b> - tong {len(episodes)} tap. Tick de chon:"
+            f"<b>{movie_name}</b> - tổng {len(episodes)} tập. Tick để chọn:"
         )
         layout.addWidget(info)
 
         btn_row = QtWidgets.QHBoxLayout()
-        self.select_all_btn = QtWidgets.QPushButton("Chon tat ca")
-        self.deselect_all_btn = QtWidgets.QPushButton("Bo chon tat ca")
+        self.select_all_btn = QtWidgets.QPushButton("Chọn tất cả")
+        self.deselect_all_btn = QtWidgets.QPushButton("Bỏ chọn tất cả")
         self.select_all_btn.clicked.connect(lambda: self._toggle_all(True))
         self.deselect_all_btn.clicked.connect(lambda: self._toggle_all(False))
         btn_row.addWidget(self.select_all_btn)
@@ -942,13 +952,13 @@ class NSEpisodePickerDialog(QtWidgets.QDialog):
         layout.addLayout(btn_row)
 
         self.search = QtWidgets.QLineEdit()
-        self.search.setPlaceholderText("Search tap (VD: 10-20, 5, 15)...")
+        self.search.setPlaceholderText("Tìm tập (VD: 10-20, 5, 15)...")
         self.search.textChanged.connect(self._filter)
         layout.addWidget(self.search)
 
         self.list_widget = QtWidgets.QListWidget()
         for ep in episodes:
-            label = f"Tap {ep.episode}"
+            label = f"Tập {ep.episode}"
             if ep.name and ep.name != movie_name:
                 label += f" - {ep.name}"
             item = QtWidgets.QListWidgetItem(label)
@@ -967,7 +977,7 @@ class NSEpisodePickerDialog(QtWidgets.QDialog):
             QtWidgets.QDialogButtonBox.StandardButton.Ok
             | QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
-        btns.button(QtWidgets.QDialogButtonBox.StandardButton.Ok).setText("Add")
+        btns.button(QtWidgets.QDialogButtonBox.StandardButton.Ok).setText("Thêm")
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
@@ -1009,7 +1019,7 @@ class NSEpisodePickerDialog(QtWidgets.QDialog):
             1 for i in range(self.list_widget.count())
             if self.list_widget.item(i).checkState() == QtCore.Qt.CheckState.Checked
         )
-        self.count_label.setText(f"Da chon: {n}/{self.list_widget.count()}")
+        self.count_label.setText(f"Đã chọn: {n}/{self.list_widget.count()}")
 
     def get_selected_episodes(self) -> list[NSEpisode]:
         """Sync checkbox states back to NSEpisode.selected and return the full list."""
@@ -1033,11 +1043,11 @@ class NSPasteJsonDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         """Build a simple text-area dialog for JSON input."""
         super().__init__(parent)
-        self.setWindowTitle("Paste JSON")
+        self.setWindowTitle("Dán JSON")
         self.resize(700, 500)
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(QtWidgets.QLabel(
-            "Dan JSON response tu API (hoac object {success, data: [...]}):"
+            "Dán JSON response từ API (hoặc object {success, data: [...]}):"
         ))
         self.text = QtWidgets.QTextEdit()
         self.text.setFont(QtGui.QFont("Consolas", 10))
@@ -1055,8 +1065,8 @@ class NSPasteJsonDialog(QtWidgets.QDialog):
         try:
             return json.loads(self.text.toPlainText())
         except json.JSONDecodeError as e:
-            QtWidgets.QMessageBox.warning(self, "Loi",
-                                         f"JSON khong hop le: {e}")
+            QtWidgets.QMessageBox.warning(self, "Lỗi",
+                                         "JSON không hợp lệ: {e}")
             return None
 
 
@@ -1084,6 +1094,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._check_netshort_ffmpeg()
         self.show()
 
+        self._check_first_launch()
         self.dep_worker = DepWorker(self.config["general"]["update_ytdlp"])
         self.dep_worker.finished.connect(self.on_dep_finished)
         self.dep_worker.progress.connect(self.on_dep_progress)
@@ -1110,17 +1121,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_tab = QtWidgets.QWidget()
         ns_layout = QtWidgets.QVBoxLayout(self.ns_tab)
 
-        cfg = QtWidgets.QGroupBox("Cau hinh")
+        cfg = QtWidgets.QGroupBox("Cấu hình")
         cfg_layout = QtWidgets.QFormLayout(cfg)
 
         save_row = QtWidgets.QHBoxLayout()
         self.ns_save_dir_edit = QtWidgets.QLineEdit()
-        self.ns_save_dir_edit.setPlaceholderText("Chon thu muc luu...")
+        self.ns_save_dir_edit.setPlaceholderText("Chọn thư mục lưu...")
         browse_btn = QtWidgets.QPushButton("Browse...")
         browse_btn.clicked.connect(self._ns_browse_save_dir)
         save_row.addWidget(self.ns_save_dir_edit)
         save_row.addWidget(browse_btn)
-        cfg_layout.addRow("Thu muc luu:", save_row)
+        cfg_layout.addRow("Thư mục lưu:", save_row)
 
         self.ns_api_url_edit = QtWidgets.QLineEdit(DEFAULT_API_URL)
         self.ns_api_url_edit.setPlaceholderText(
@@ -1132,10 +1143,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_concurrency_spin = QtWidgets.QSpinBox()
         self.ns_concurrency_spin.setRange(1, 16)
         self.ns_concurrency_spin.setValue(4)
-        options_row.addWidget(QtWidgets.QLabel("Luong:"))
+        options_row.addWidget(QtWidgets.QLabel("Luồng:"))
         options_row.addWidget(self.ns_concurrency_spin)
         options_row.addSpacing(10)
-        self.ns_sub_checkbox = QtWidgets.QCheckBox("Tai phu de")
+        self.ns_sub_checkbox = QtWidgets.QCheckBox("Tải phụ đề")
         self.ns_sub_checkbox.setChecked(True)
         options_row.addWidget(self.ns_sub_checkbox)
         self.ns_merge_checkbox = QtWidgets.QCheckBox("Hardcode sub (merge)")
@@ -1145,11 +1156,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_crf_spin = QtWidgets.QSpinBox()
         self.ns_crf_spin.setRange(18, 28)
         self.ns_crf_spin.setValue(22)
-        self.ns_crf_spin.setToolTip("CRF: 18=chat luong cao, 28=nho hon")
+        self.ns_crf_spin.setToolTip("CRF: 18=chất lượng cao, 28=nhỏ hơn")
         options_row.addWidget(QtWidgets.QLabel("CRF:"))
         options_row.addWidget(self.ns_crf_spin)
         options_row.addStretch()
-        cfg_layout.addRow("Tuy chon:", options_row)
+        cfg_layout.addRow("Tùy chọn:", options_row)
 
         # Sub style row
         sub_style_row = QtWidgets.QHBoxLayout()
@@ -1164,9 +1175,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_sub_font_combo.setCurrentText(_bundled[0] if _bundled else "Arial")
         self.ns_sub_font_combo.setMinimumWidth(180)
         self.ns_sub_font_combo.setToolTip(
-            "Font chu cho phu de.\n"
-            "Font trong thu muc fonts/ se tu dong cai khi merge.\n"
-            "Co the go ten font bat ky hoac chon tu danh sach."
+            "Font chữ cho phụ đề.\n"
+            "Font trong thư mục fonts/ sẽ tự động cài khi merge.\n"
+            "Có thể gõ tên font bất kỳ hoặc chọn từ danh sách."
         )
         sub_style_row.addWidget(self.ns_sub_font_combo)
         sub_style_row.addSpacing(16)
@@ -1174,7 +1185,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_sub_size_spin = QtWidgets.QSpinBox()
         self.ns_sub_size_spin.setRange(12, 80)
         self.ns_sub_size_spin.setValue(20)
-        self.ns_sub_size_spin.setToolTip("Co chu phu de (khuyen nghi: 18-28)")
+        self.ns_sub_size_spin.setToolTip("Cỡ chữ phụ đề (khuyến nghị: 18-28)")
         sub_style_row.addWidget(self.ns_sub_size_spin)
         sub_style_row.addSpacing(16)
         sub_style_row.addWidget(QtWidgets.QLabel("MarginV:"))
@@ -1182,9 +1193,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_sub_margin_v_spin.setRange(0, 300)
         self.ns_sub_margin_v_spin.setValue(30)
         self.ns_sub_margin_v_spin.setToolTip(
-            "Vi tri sub theo chieu doc (MarginV).\n"
-            "0 = sat mep duoi, tang de day sub len cao hon.\n"
-            "Mac dinh: 30"
+            "Vị trí sub theo chiều dọc (MarginV).\n"
+            "0 = sát mép dưới, tăng để đẩy sub lên cao hơn.\n"
+            "Mặc định: 30"
         )
         sub_style_row.addWidget(self.ns_sub_margin_v_spin)
         sub_style_row.addStretch()
@@ -1192,7 +1203,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         ns_layout.addWidget(cfg)
 
-        inp = QtWidgets.QGroupBox("Them phim")
+        inp = QtWidgets.QGroupBox("Thêm phim")
         inp_layout = QtWidgets.QHBoxLayout(inp)
 
         inp_layout.addWidget(QtWidgets.QLabel("Movie ID:"))
@@ -1221,7 +1232,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ns_table_layout.setContentsMargins(0, 0, 0, 0)
 
         ns_table_header = QtWidgets.QHBoxLayout()
-        ns_table_header.addWidget(QtWidgets.QLabel("<b>Danh sach phim da them</b>"))
+        ns_table_header.addWidget(QtWidgets.QLabel("<b>Danh sách phim đã thêm</b>"))
         ns_table_header.addStretch()
         self.ns_start_btn = QtWidgets.QPushButton("Start Download & Merge")
         self.ns_start_btn.clicked.connect(self._ns_on_start)
@@ -1243,7 +1254,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.ns_table = QtWidgets.QTableWidget(0, 5)
         self.ns_table.setHorizontalHeaderLabels(
-            ["Name", "Tap", "Chon", "Trang thai", "Actions"]
+            ["Tên phim", "Tập", "Chọn", "Trạng thái", "Actions"]
         )
         self.ns_table.horizontalHeader().setSectionResizeMode(
             0, QtWidgets.QHeaderView.ResizeMode.Stretch
@@ -1286,7 +1297,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ns_progress_row.addWidget(self.ns_progress_bar)
         ns_layout.addLayout(ns_progress_row)
 
-        self.ns_status = QtWidgets.QLabel("San sang.")
+        self.ns_status = QtWidgets.QLabel("Sẵn sàng.")
         self.ns_status.setStyleSheet("color: #888; font-size: 11px; padding-left: 4px;")
         ns_layout.addWidget(self.ns_status)
 
@@ -1297,9 +1308,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if not _ns_check_ffmpeg():
             QtWidgets.QMessageBox.warning(
                 self, "ffmpeg",
-                "Khong tim thay ffmpeg trong PATH.\n"
-                "Chuc nang merge se bi disable. "
-                "Tai tai https://ffmpeg.org/download.html."
+                "Không tìm thấy ffmpeg trong PATH.\n"
+                "Chức năng merge sẽ bị disable. "
+                "Tải tại https://ffmpeg.org/download.html."
             )
             self.ns_merge_checkbox.setChecked(False)
             self.ns_merge_checkbox.setEnabled(False)
@@ -1307,7 +1318,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def _ns_browse_save_dir(self):
         """Open a folder picker and populate the save directory field."""
         d = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Chon thu muc luu",
+            self, "Chọn thư mục lưu",
             self.ns_save_dir_edit.text() or str(Path.home())
         )
         if d:
@@ -1359,41 +1370,41 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self,
             "About Tool Download Movie Pro",
             f'<a href="https://github.com/dsymbol/yt-dlp-gui">Tool Download Movie Pro</a> {__version__}<br><br>'
-            "Phan mem tai phim, video tu nhieu nguon.<br>"
-            "NetShort mode: tai phim tu xemshort.top.",
+            "Phần mềm tải phim, video từ nhiều nguồn.<br>"
+            "NetShort mode: tải phim từ xemshort.top.",
         )
 
     def show_help(self):
         """Display the usage guide dialog."""
         help_text = (
-            "<b>Huong dan su dung Tool Download Movie Pro</b><br><br>"
-            "<b>1. Tim Movie ID:</b><br>"
-            "- Truy cap <a href='https://xemshort.top'>https://xemshort.top</a><br>"
-            "- Tim phim muon tai, mo trang phim<br>"
-            "- Copy Movie ID tu URL (vi du: xemshort.top/phim/ten-phim-<b>2043519588162863105</b>.html)<br><br>"
-            "<b>2. Tai phim:</b><br>"
-            "- Dan Movie ID vao o \"Movie ID\"<br>"
-            "- Nhan \"Fetch\" de lay danh sach tap<br>"
-            "- Chon preset (mp4/webm/best) va thu muc luu<br>"
-            "- Nhan \"Start Download\" de tai<br><br>"
-            "<b>3. Tai phu de & Auto Merged Sub:</b><br>"
-            "- <b>Tai phu de:</b> Tai file phu de (vn/en)<br>"
-            "- <b>Auto Merged Sub:</b> Mac dinh luon bat - khi chon \"Tai phu de\", "
-            "ban <b>phai tick</b> checkbox \"Auto Merged Sub\" truoc khi nhan Start.<br>"
-            "- Neu khong tick \"Auto Merged Sub\" khi tai phu de, phim se khong duoc ghep phu de.<br>"
-            "- <b>Hardcode sub (merge):</b> Burn phu de vao video (tat ca trong 1 file)<br><br>"
-            "<b>4. Cac tinh nang khac:</b><br>"
-            "- <b>Load JSON File:</b> Tai file JSON da luu truoc do<br>"
-            "- <b>Paste JSON:</b> Dan truc tiep noi dung JSON<br><br>"
-            "<b>5. Meo:</b><br>"
-            "- Chon preset \"mp4\" de tuong thich tot nhat<br>"
-            "- Neu phim co phu de, can tick ca \"Tai phu de\" va \"Auto Merged Sub\"<br>"
-            "- Tick \"Hardcode sub (merge)\" de burn phu de vao video<br><br>"
+            "<b>Hướng dẫn sử dụng Tool Download Movie Pro</b><br><br>"
+            "<b>1. Tìm Movie ID:</b><br>"
+            "- Truy cập <a href='https://xemshort.top'>https://xemshort.top</a><br>"
+            "- Tìm phim muốn tải, mở trang phim<br>"
+            "- Copy Movie ID từ URL (ví dụ: xemshort.top/phim/ten-phim-<b>2043519588162863105</b>.html)<br><br>"
+            "<b>2. Tải phim:</b><br>"
+            "- Dán Movie ID vào ô \"Movie ID\"<br>"
+            "- Nhấn \"Fetch\" để lấy danh sách tập<br>"
+            "- Chọn preset (mp4/webm/best) và thư mục lưu<br>"
+            "- Nhấn \"Start Download\" để tải<br><br>"
+            "<b>3. Tải phụ đề & Auto Merged Sub:</b><br>"
+            "- <b>Tải phụ đề:</b> Tải file phụ đề (vn/en)<br>"
+            "- <b>Auto Merged Sub:</b> Mặc định luôn bật - khi chọn \"Tải phụ đề\", "
+            "bạn <b>phải tick</b> checkbox \"Auto Merged Sub\" trước khi nhấn Start.<br>"
+            "- Nếu không tick \"Auto Merged Sub\" khi tải phụ đề, phim sẽ không được ghép phụ đề.<br>"
+            "- <b>Hardcode sub (merge):</b> Burn phụ đề vào video (tất cả trong 1 file)<br><br>"
+            "<b>4. Các tính năng khác:</b><br>"
+            "- <b>Load JSON File:</b> Tải file JSON đã lưu trước đó<br>"
+            "- <b>Paste JSON:</b> Dán trực tiếp nội dung JSON<br><br>"
+            "<b>5. Mẹo:</b><br>"
+            "- Chọn preset \"mp4\" để tương thích tốt nhất<br>"
+            "- Nếu phim có phụ đề, cần tick cả \"Tải phụ đề\" và \"Auto Merged Sub\"<br>"
+            "- Tick \"Hardcode sub (merge)\" để burn phụ đề vào video<br><br>"
             f"<b>Version:</b> {__version__}"
         )
 
         msg = QtWidgets.QMessageBox(self)
-        msg.setWindowTitle("Huong dan su dung")
+        msg.setWindowTitle("Hướng dẫn sử dụng")
         msg.setText(help_text)
         msg.setTextFormat(QtCore.Qt.RichText)
         msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
@@ -1576,7 +1587,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.index += 1
             added += 1
 
-        self.statusBar.showMessage(f"Da them {added} tap vao queue", 5000)
+        self.statusBar.showMessage(f"Đã thêm {added} tập vào queue", 5000)
 
     def button_clear(self):
         """Clear the download queue and tree; blocked if downloads are in progress."""
@@ -1733,6 +1744,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         event.accept()
 
     # -------------------------------------------------------------------------
+    # First launch welcome
+    # -------------------------------------------------------------------------
+
+    def _check_first_launch(self):
+        """Show a welcome dialog on first launch only (once per installation)."""
+        s = self._ns_settings()
+        if s.value("first_launch_done", False, type=bool):
+            return
+        s.setValue("first_launch_done", True)
+        greeting = _get_time_greeting()
+        QtWidgets.QMessageBox.information(
+            self,
+            "Tool Download Movie Pro",
+            f"Chào bạn! Đã quay trở lại với Tool Download Movie Pro.\n\n"
+            f"Bạn đang sử dụng phiên bản {__version__}.\n"
+            f"Chúc bạn một ngày làm việc hiệu quả!",
+        )
+
+    # -------------------------------------------------------------------------
     # NetShort settings persistence
     # -------------------------------------------------------------------------
 
@@ -1799,17 +1829,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """Validate Movie ID and API URL then start NSFetchWorker."""
         movie_id = self.ns_movie_id_edit.text().strip()
         if not movie_id:
-            QtWidgets.QMessageBox.warning(self, "Thieu input",
-                                          "Vui long nhap Movie ID.")
+            QtWidgets.QMessageBox.warning(self, "Thiếu input",
+                                          "Vui lòng nhập Movie ID.")
             return
         api_url = self.ns_api_url_edit.text().strip()
         if not api_url.startswith(("http://", "https://")):
             QtWidgets.QMessageBox.warning(self, "API URL",
-                                          "API URL phai bat dau bang http:// hoac https://.")
+                                          "API URL phải bắt đầu bằng http:// hoặc https://.")
             return
 
         self.ns_fetch_btn.setEnabled(False)
-        self.ns_status.setText(f"Dang fetch {movie_id}...")
+        self.ns_status.setText(f"Đang fetch {movie_id}...")
         self._ns_log(f"Fetching {movie_id}...")
 
         self.nsfetch_worker = NSFetchWorker(api_url, movie_id)
@@ -1823,15 +1853,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def _ns_on_fetch_success(self, episodes: list[NSEpisode], movie_name: str = ""):
         """Handle successful fetch: update status and open the episode picker."""
         name = movie_name or (episodes[0].name if episodes else "Unknown")
-        self.ns_status.setText(f"Fetched {len(episodes)} tap.")
-        self._ns_log(f"Fetched {len(episodes)} tap.")
+        self.ns_status.setText(f"Fetched {len(episodes)} tập.")
+        self._ns_log(f"Fetched {len(episodes)} tập.")
         self._ns_show_picker(episodes, name)
 
     def _ns_on_fetch_error(self, msg: str):
         """Handle fetch failure: log the error and show a critical message box."""
-        self.ns_status.setText("Fetch loi.")
-        self._ns_log(f"ERROR: {msg}")
-        QtWidgets.QMessageBox.critical(self, "Fetch loi", msg)
+        self.ns_status.setText("Fetch lỗi.")
+        self._ns_log(f"Lỗi: {msg}")
+        QtWidgets.QMessageBox.critical(self, "Fetch lỗi", msg)
 
     def _ns_on_paste_json(self):
         """Open the Paste JSON dialog and load episodes from the typed JSON."""
@@ -1844,18 +1874,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 movie_name = data.get("shortPlayName", "") if isinstance(data, dict) else ""
                 episodes = _ns_parse_episodes(data, movie_name)
                 if not episodes:
-                    QtWidgets.QMessageBox.warning(self, "Rong",
-                                                  "JSON khong chua episode nao.")
+                    QtWidgets.QMessageBox.warning(self, "Rỗng",
+                                                  "JSON không chứa episode nào.")
                     return
                 self._ns_show_picker(episodes, movie_name)
             except Exception as e:
-                QtWidgets.QMessageBox.critical(self, "Parse loi",
+                QtWidgets.QMessageBox.critical(self, "Parse lỗi",
                                                f"{type(e).__name__}: {e}")
 
     def _ns_on_load_json(self):
         """Open a file picker, read a saved JSON file, and load its episodes."""
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Chon file JSON", "", "JSON (*.json);;All (*)"
+            self, "Chọn file JSON", "", "JSON (*.json);;All (*)"
         )
         if not path:
             return
@@ -1865,12 +1895,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             movie_name = data.get("shortPlayName", "") if isinstance(data, dict) else ""
             episodes = _ns_parse_episodes(data, movie_name)
             if not episodes:
-                QtWidgets.QMessageBox.warning(self, "Rong",
-                                              "File khong co episode.")
+                QtWidgets.QMessageBox.warning(self, "Rỗng",
+                                              "File không có episode.")
                 return
             self._ns_show_picker(episodes, movie_name)
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Load loi",
+            QtWidgets.QMessageBox.critical(self, "Load lỗi",
                                            f"{type(e).__name__}: {e}")
 
     def _ns_show_picker(self, episodes: list[NSEpisode], movie_name: str = ""):
@@ -1892,7 +1922,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self._ns_add_movie_to_table(movie)
             self.ns_start_btn.setEnabled(True)
             self._ns_log(
-                f"Them '{name}' - {movie.selected_count}/{movie.total} tap."
+                f"Thêm '{name}' - {movie.selected_count}/{movie.total} tập."
             )
 
     def _ns_add_movie_to_table(self, movie: NSMovie):
@@ -1913,18 +1943,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         btn_layout.setContentsMargins(2, 2, 2, 2)
         btn_layout.setSpacing(4)
 
-        open_btn = QtWidgets.QPushButton("Mo thu muc")
-        open_btn.setToolTip("Mo thu muc chua video")
+        open_btn = QtWidgets.QPushButton("Mở thư mục")
+        open_btn.setToolTip("Mở thư mục chứa video")
         open_btn.clicked.connect(lambda _, m=movie: self._ns_open_movie_folder(m))
         btn_layout.addWidget(open_btn)
 
-        open_merged_btn = QtWidgets.QPushButton("Mo merged")
-        open_merged_btn.setToolTip("Mo thu muc merged/")
+        open_merged_btn = QtWidgets.QPushButton("Mở merged")
+        open_merged_btn.setToolTip("Mở thư mục merged/")
         open_merged_btn.clicked.connect(lambda _, m=movie: self._ns_open_merged_folder(m))
         btn_layout.addWidget(open_merged_btn)
 
-        remerge_btn = QtWidgets.QPushButton("Merge lai")
-        remerge_btn.setToolTip("Xoa file merged cu va hardcode sub lai")
+        remerge_btn = QtWidgets.QPushButton("Merge lại")
+        remerge_btn.setToolTip("Xóa file merged cũ và hardcode sub lại")
         remerge_btn.clicked.connect(lambda _, m=movie: self._ns_remerge_movie(m))
         btn_layout.addWidget(remerge_btn)
 
@@ -1988,8 +2018,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """Delete merged files for done episodes and re-run the merge phase."""
         if self.nsworker and self.nsworker.isRunning():
             QtWidgets.QMessageBox.warning(
-                self, "Dang chay",
-                "Vui long doi tien trinh hien tai hoan tat truoc khi re-merge."
+                self, "Đang chạy",
+                "Vui lòng đợi tiến trình hiện tại hoàn tất trước khi re-merge."
             )
             return
 
@@ -2008,8 +2038,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if reset_count == 0:
             QtWidgets.QMessageBox.information(
                 self, "Re-merge",
-                "Khong co tap nao trang thai 'done' de re-merge.\n"
-                "Chi re-merge duoc khi tap da 'done'."
+                "Không có tập nào trạng thái 'done' để re-merge.\n"
+                "Chỉ re-merge được khi tập đã 'done'."
             )
             return
 
@@ -2017,7 +2047,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             row = self.nsmovies.index(movie)
             self._ns_set_status(row, "Ready")
 
-        self._ns_log(f"Re-merge '{movie.name}': reset {reset_count} tap, bat dau lai...")
+        self._ns_log(f"Re-merge '{movie.name}': reset {reset_count} tập, bắt đầu lại...")
         self._ns_on_start()
 
     def _ns_on_start(self):
@@ -2031,8 +2061,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             for m in self.nsmovies:
                 self._ns_update_row_btns(m)
             QtWidgets.QMessageBox.information(
-                self, "Hoan tat",
-                "Khong co phim nao can tai."
+                self, "Hoàn tất",
+                "Không có phim nào cần tải."
             )
             return
 
@@ -2051,15 +2081,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         try:
             movie = next(iterator)
         except StopIteration:
-            self._ns_log("=== TAT CA HOAN TAT ===")
-            self.ns_status.setText("Hoan tat.")
+            self._ns_log("=== TẤT CẢ HOÀN TẤT ===")
+            self.ns_status.setText("Hoàn tất.")
             self.ns_start_btn.setEnabled(True)
             self.ns_stop_btn.setEnabled(False)
             self.ns_fetch_btn.setEnabled(True)
             self.ns_progress_bar.setValue(100)
             QtWidgets.QMessageBox.information(
-                self, "Done",
-                "Da hoan thanh tat ca phim trong bang."
+                self, "Hoàn tất",
+                "Đã hoàn thành tất cả phim trong bảng."
             )
             return
 
@@ -2125,7 +2155,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def _ns_on_stop(self):
         """Signal the active worker to stop and reset the UI button states."""
-        self._ns_log("Dang dung...")
+        self._ns_log("Đang dừng...")
         self._ns_iterator = None
         if self.nsworker and self.nsworker.isRunning():
             self.nsworker.stop()
