@@ -78,18 +78,18 @@ jobs:
 
       - name: Package for distribution
         working-directory: ./app
-        shell: bash
+        shell: pwsh
         run: |
-          # Create zip (for manual download) — use bash zip, not PowerShell Compress-Archive
-          cd dist && zip -r ../yt-dlp-gui-win64.zip yt-dlp-gui/ && cd ..
+          # Create zip (for manual download)
+          Compress-Archive -Path dist/yt-dlp-gui/* -DestinationPath ./yt-dlp-gui-win64.zip
 
           # Create a directory for release assets
-          mkdir -p release-assets
+          New-Item -ItemType Directory -Force release-assets | Out-Null
           # Copy the standalone .exe so it can be uploaded as a release asset
-          cp dist/yt-dlp-gui/yt-dlp-gui.exe release-assets/
+          Copy-Item dist/yt-dlp-gui/yt-dlp-gui.exe release-assets/
 
-          echo "=== dist/yt-dlp-gui/ contents ==="
-          ls -la dist/yt-dlp-gui/
+          Write-Host "=== dist/yt-dlp-gui/ contents ==="
+          Get-ChildItem dist/yt-dlp-gui/
 
       - name: Upload nightly release
         if: ${{ github.event.inputs.nightly == 'true' }}
