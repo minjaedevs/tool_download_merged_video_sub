@@ -131,6 +131,6 @@ dmypy.json
 .idea/
 bin/
 
-config.toml
+# config.toml is committed to repo as default bundled config
 debug.log
 /app/release
