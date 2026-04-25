@@ -30,8 +30,12 @@ from dep_dl import DepWorker
 from ui.main_window import Ui_MainWindow
 from utils import BIN_DIR, ROOT, ItemRoles, TreeColumn, load_toml, save_toml
 from worker import DownloadWorker
+from update_version import Updater
 
-__version__ = "1.0.0"
+try:
+    from _version import __version__
+except ImportError:
+    __version__ = "1.0.0"
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -1094,6 +1098,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._ns_iterator = None
         self._sub_dialogs = {}
 
+        self.updater = Updater(self)
+        self.updater.check(silent=True)
+
     # -------------------------------------------------------------------------
     # NetShort UI setup
     # -------------------------------------------------------------------------
@@ -1328,6 +1335,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.action_help.triggered.connect(self.show_help)
         self.action_clear_url_list.triggered.connect(self.te_link.clear)
         self.action_load_txt.triggered.connect(self.button_load_txt)
+        self.action_check_update.triggered.connect(self._on_check_update)
 
     def on_dep_progress(self, status):
         """Show dependency download status in the status bar."""
@@ -1390,6 +1398,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         msg.setTextFormat(QtCore.Qt.RichText)
         msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
         msg.exec()
+
+    def _on_check_update(self):
+        """Called when the user selects 'Kiem tra cap nhat' from the Help menu."""
+        self.updater.check(silent=False)
 
     def open_menu(self, position):
         """Show right-click context menu on the download tree (Delete / Copy URL / Open Folder)."""
@@ -1614,6 +1626,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 "mp4": "-f bv*[vcodec^=avc]+ba[ext=m4a]/b",
                 "mp3": "--extract-audio --audio-format mp3 --audio-quality 0",
                 "xemshort": "-f bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
+            },
+            "update": {
+                "github_repo": "minjaedevs/tool_download_merged_video_sub",
+                "enabled": True,
             },
         }
 

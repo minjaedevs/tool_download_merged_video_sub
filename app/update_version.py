@@ -1,0 +1,299 @@
+"""
+Auto-update module: checks GitHub Releases for a newer version and
+installs it by replacing the running executable.
+
+Config (bin_dir/config.toml):
+  [update]
+  enabled = true
+  github_repo = "owner/repo"   # e.g. "minjaedevs/tool_download_merged_video_sub"
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+import requests
+import tomlkit
+from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtWidgets import QMessageBox, QProgressDialog
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _v(s: str) -> tuple[int, ...]:
+    """Parse a version string into a comparable tuple."""
+    return tuple(int(x) for x in s.lstrip("v").split(".") if x.isdigit())
+
+
+def _get_version() -> str:
+    """Return the current app version from _version.py."""
+    try:
+        bin_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
+        version_file = bin_dir / "_version.py"
+        if not version_file.exists():
+            return "1.0.0"
+        code = version_file.read_text(encoding="utf-8")
+        for line in code.splitlines():
+            line = line.strip()
+            if line.startswith("__version__"):
+                parts = line.split("=", 1)
+                if len(parts) == 2:
+                    return parts[1].strip().strip('"').strip("'")
+        return "1.0.0"
+    except Exception:
+        return "1.0.0"
+
+
+def _get_github_repo() -> str | None:
+    """Read github_repo from config.toml, return None if absent."""
+    try:
+        bin_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
+        config_path = bin_dir / "config.toml"
+        if not config_path.exists():
+            return None
+        cfg = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+        return cfg.get("update", {}).get("github_repo") or cfg.get("general", {}).get("github_repo")
+    except Exception:
+        return None
+
+
+def _get_api_url() -> str | None:
+    """Build the GitHub releases API URL from the configured repo."""
+    repo = _get_github_repo()
+    if not repo:
+        return None
+    return f"https://api.github.com/repos/{repo}/releases/latest"
+
+
+def _get_current_exe() -> Path:
+    """Return the path to the currently running executable."""
+    return Path(sys.executable)
+
+
+def _get_exe_name() -> str:
+    """Return the .exe filename used in release assets."""
+    exe = _get_current_exe()
+    # In frozen mode, the exe name in the release should match the built name
+    return exe.name
+
+
+# ── Workers ──────────────────────────────────────────────────────────────────
+
+
+class DownloadWorker(QThread):
+    """Background thread that streams the installer .exe from GitHub."""
+
+    progress = Signal(int)
+    done = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, url: str):
+        super().__init__()
+        self.url = url
+
+    def run(self):
+        try:
+            r = requests.get(self.url, stream=True, timeout=60,
+                             headers={"Accept": "application/octet-stream"})
+            r.raise_for_status()
+            total = int(r.headers.get("content-length", 0))
+
+            tmp = Path(tempfile.gettempdir()) / "yt-dlp-gui-update.exe"
+            done = 0
+            with open(tmp, "wb") as f:
+                for chunk in r.iter_content(65536):
+                    if not chunk:
+                        continue
+                    f.write(chunk)
+                    done += len(chunk)
+                    if total:
+                        self.progress.emit(int(done * 100 / total))
+
+            self.done.emit(str(tmp))
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
+# ── Updater ───────────────────────────────────────────────────────────────────
+
+
+class Updater(QObject):
+    """
+    Coordinates version checking, download, and installation of a new release.
+
+    Usage::
+
+        from update_version import Updater
+        updater = Updater(parent_window)
+        updater.check(silent=True)   # check on startup (no dialog if up-to-date)
+        updater.check(silent=False)  # called from menu: shows "up-to-date" msg
+    """
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self._progress_dlg: QProgressDialog | None = None
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def check(self, silent: bool = False) -> None:
+        """
+        Check GitHub for a newer release.
+
+        Args:
+            silent: If True, suppress the "already up-to-date" dialog.
+                    Use True when checking automatically at startup.
+        """
+        api_url = _get_api_url()
+        if not api_url:
+            if not silent:
+                QMessageBox.warning(
+                    self.parent, "Lỗi cấu hình",
+                    "Không tìm thấy 'github_repo' trong config.toml.\n"
+                    "Vui lòng thêm vào phần [update]."
+                )
+            return
+
+        try:
+            r = requests.get(api_url, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+
+            latest_tag: str = data.get("tag_name", "")
+            if not latest_tag:
+                return
+
+            current_ver = _get_version()
+            if _v(latest_tag) <= _v(current_ver):
+                if not silent:
+                    QMessageBox.information(
+                        self.parent, "Đã là bản mới nhất",
+                        f"Bạn đang dùng phiên bản mới nhất ({current_ver})."
+                    )
+                return
+
+            # Find the matching .exe asset
+            exe_name = _get_exe_name()
+            asset = next(
+                (a for a in data.get("assets", []) if a["name"] == exe_name),
+                None,
+            )
+            if not asset:
+                # Fallback: take the first .exe asset
+                asset = next(
+                    (a for a in data.get("assets", []) if a["name"].endswith(".exe")),
+                    None,
+                )
+            if not asset:
+                return
+
+            notes = data.get("body", "").strip()
+            ret = QMessageBox.question(
+                self.parent,
+                "Có bản cập nhật mới",
+                f"Phiên bản hiện tại: {current_ver}\n"
+                f"Phiên bản mới: {latest_tag}\n\n"
+                f"{notes[:500]}\n\nTải và cập nhật ngay?",
+            )
+            if ret == QMessageBox.Yes:
+                self._download(asset["browser_download_url"])
+
+        except Exception as e:
+            if not silent:
+                QMessageBox.warning(
+                    self.parent, "Lỗi",
+                    f"Không kiểm tra được bản cập nhật:\n{e}"
+                )
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _download(self, url: str) -> None:
+        self._progress_dlg = QProgressDialog(
+            "Đang tải bản cập nhật…", "Huỷ", 0, 100, self.parent
+        )
+        self._progress_dlg.setWindowTitle("Đang cập nhật")
+        self._progress_dlg.setMinimumDuration(0)
+        self._progress_dlg.canceled.connect(self._on_cancel)
+
+        self._worker = DownloadWorker(url)
+        self._worker.progress.connect(self._on_progress)
+        self._worker.done.connect(self._on_downloaded)
+        self._worker.failed.connect(self._on_failed)
+        self._worker.start()
+
+    def _on_progress(self, pct: int) -> None:
+        if self._progress_dlg:
+            self._progress_dlg.setValue(pct)
+
+    def _on_cancel(self) -> None:
+        if hasattr(self, "_worker") and self._worker.isRunning():
+            self._worker.terminate()
+            self._worker.wait(3000)
+        if self._progress_dlg:
+            self._progress_dlg.close()
+
+    def _on_failed(self, msg: str) -> None:
+        if self._progress_dlg:
+            self._progress_dlg.close()
+        QMessageBox.critical(self.parent, "Lỗi tải", f"Không tải được bản cập nhật:\n{msg}")
+
+    def _on_downloaded(self, new_exe_path: str) -> None:
+        if self._progress_dlg:
+            self._progress_dlg.setValue(100)
+
+        self._install(new_exe_path)
+
+    def _install(self, new_exe_path: str) -> None:
+        """
+        Replace the running executable with the downloaded one.
+
+        The trick:
+          1. Write a .bat script to a temp directory.
+          2. The bat waits 2 s, moves the new exe over the current one,
+             then relaunches the app and deletes itself.
+          3. Launch the bat detached and close the current app.
+        """
+        current_exe = _get_current_exe()
+        bat_path = Path(tempfile.gettempdir()) / "yt-dlp-gui-update.bat"
+        new_exe = Path(new_exe_path)
+
+        bat_content = (
+            '@echo off\n'
+            'timeout /t 2 /nobreak >nul\n'
+            f'move /y "{new_exe}" "{current_exe}"\n'
+            f'start "" "{current_exe}"\n'
+            'del "%~f0"\n'
+        )
+
+        try:
+            bat_path.write_text(bat_content, encoding="utf-8")
+        except Exception as e:
+            QMessageBox.critical(
+                self.parent, "Lỗi",
+                f"Không tạo được script cài đặt:\n{e}"
+            )
+            return
+
+        # Launch bat detached and exit
+        try:
+            subprocess.Popen(
+                ["cmd", "/c", str(bat_path)],
+                creationflags=(
+                    subprocess.CREATE_NO_WINDOW
+                    | subprocess.DETACHED_PROCESS
+                    | subprocess.CREATE_NEW_PROCESS_GROUP
+                ),
+                cwd=str(current_exe.parent),
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self.parent, "Lỗi",
+                f"Không chạy được script cài đặt:\n{e}"
+            )
+            return
+
+        # Close the app so the bat can replace the exe
+        self.parent.close()
