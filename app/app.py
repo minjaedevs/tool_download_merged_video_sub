@@ -488,6 +488,16 @@ def _ns_install_fonts(fonts_dir: Path, log_fn=None) -> None:
                 log_fn(f"Font install warn ({font_file.name}): {e}")
 
 
+def _ns_load_bundled_fonts(fonts_dir: Path) -> list[str]:
+    """Register TTF/OTF files from fonts_dir with Qt and return their family names."""
+    families = []
+    for f in sorted(fonts_dir.glob("*.ttf")) + sorted(fonts_dir.glob("*.otf")):
+        fid = QtGui.QFontDatabase.addApplicationFont(str(f))
+        if fid >= 0:
+            families.extend(QtGui.QFontDatabase.applicationFontFamilies(fid))
+    return families
+
+
 # ============================================================================
 # NETSHORT WORKER THREADS
 # ============================================================================
@@ -594,7 +604,8 @@ class NSDownloadMergeWorker(QtCore.QThread):
 
     def __init__(self, movie: NSMovie, concurrency: int, download_sub: bool,
                  do_merge: bool, crf: int, preset: str,
-                 sub_font: str = "UTM Alter Gothic", sub_size: int = 20):
+                 sub_font: str = "UTM Alter Gothic", sub_size: int = 20,
+                 sub_margin_v: int = 30):
         """Configure worker with movie data, thread count, and ffmpeg encode settings."""
         super().__init__()
         self.movie = movie
@@ -605,6 +616,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
         self.ffpreset = preset
         self.sub_font = sub_font
         self.sub_size = sub_size
+        self.sub_margin_v = sub_margin_v
         import threading
         self._stop = threading.Event()
 
@@ -693,12 +705,23 @@ class NSDownloadMergeWorker(QtCore.QThread):
         self.episode_status.emit(ep.episode, "downloading")
 
         video_path = folder / f"{base}.mp4"
-        if not self._download_file(ep.play, video_path, f"video tap {ep.episode}"):
+        dl_ok = self._download_file(ep.play, video_path, f"video tap {ep.episode}")
+
+        # If file already exists (skipped), still mark as downloaded so merge can run
+        if video_path.exists() and video_path.stat().st_size > 1024 and ep.status != "error":
+            ep.video_path = video_path
+            ep.status = "downloaded"
+            self.episode_status.emit(ep.episode, "downloaded")
+            self.log(f"SKIP video tap {ep.episode} (da ton tai)")
+        elif not dl_ok:
             ep.status = "error"
             ep.error_msg = "download video failed"
             self.episode_status.emit(ep.episode, "error")
             return False
-        ep.video_path = video_path
+        else:
+            ep.video_path = video_path
+            ep.status = "downloaded"
+            self.episode_status.emit(ep.episode, "downloaded")
 
         if self.download_sub and ep.subtitle_url:
             # Check if sub already exists (skip download to preserve user edits)
@@ -786,7 +809,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
                 f":fontsdir='{fonts_dir_escaped}'"
                 f":force_style='FontName={self.sub_font},FontSize={self.sub_size},"
                 f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                f"BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV=30'"
+                f"BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV={self.sub_margin_v}'"
             )
         else:
             self.log("WARN: fonts/ dir not found, fallback to system fonts")
@@ -794,7 +817,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
                 f"subtitles='{sub_filter}':force_style="
                 f"'FontName={self.sub_font},FontSize={self.sub_size},"
                 f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                f"BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV=30'"
+                f"BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV={self.sub_margin_v}'"
             )
 
         cmd = [
@@ -852,7 +875,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
 
         with ThreadPoolExecutor(max_workers=self.concurrency) as pool:
             futures = {pool.submit(self._download_episode, e): e for e in selected}
-            for fut in as_completed(futures):
+            for _ in as_completed(futures):
                 if self._stop.is_set():
                     for f in futures:
                         f.cancel()
@@ -872,7 +895,8 @@ class NSDownloadMergeWorker(QtCore.QThread):
                 for ep in selected:
                     if self._stop.is_set():
                         break
-                    if ep.status == "downloaded":
+                    # Merge if downloaded OR if video already exists (re-merge case)
+                    if ep.status in ("downloaded", "pending") and ep.video_path and ep.video_path.exists():
                         self._merge_episode(ep)
                         done += 1
                         self.progress.emit(done, total * 2)
@@ -1125,10 +1149,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         sub_style_row.addWidget(QtWidgets.QLabel("Font:"))
         self.ns_sub_font_combo = QtWidgets.QComboBox()
         self.ns_sub_font_combo.setEditable(True)
-        for _f in ["UTM Alter Gothic", "Arial", "Arial Bold", "Tahoma",
-                   "Segoe UI", "Times New Roman", "Calibri", "Verdana"]:
+        _fonts_dir = Path(__file__).parent / "fonts"
+        _bundled = _ns_load_bundled_fonts(_fonts_dir) if _fonts_dir.exists() else []
+        _system = []
+        for _f in _bundled + [f for f in _system if f not in _bundled]:
             self.ns_sub_font_combo.addItem(_f)
-        self.ns_sub_font_combo.setCurrentText("UTM Alter Gothic")
+        self.ns_sub_font_combo.setCurrentText(_bundled[0] if _bundled else "Arial")
         self.ns_sub_font_combo.setMinimumWidth(180)
         self.ns_sub_font_combo.setToolTip(
             "Font chu cho phu de.\n"
@@ -1143,6 +1169,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_sub_size_spin.setValue(20)
         self.ns_sub_size_spin.setToolTip("Co chu phu de (khuyen nghi: 18-28)")
         sub_style_row.addWidget(self.ns_sub_size_spin)
+        sub_style_row.addSpacing(16)
+        sub_style_row.addWidget(QtWidgets.QLabel("MarginV:"))
+        self.ns_sub_margin_v_spin = QtWidgets.QSpinBox()
+        self.ns_sub_margin_v_spin.setRange(0, 300)
+        self.ns_sub_margin_v_spin.setValue(30)
+        self.ns_sub_margin_v_spin.setToolTip(
+            "Vi tri sub theo chieu doc (MarginV).\n"
+            "0 = sat mep duoi, tang de day sub len cao hon.\n"
+            "Mac dinh: 30"
+        )
+        sub_style_row.addWidget(self.ns_sub_margin_v_spin)
         sub_style_row.addStretch()
         cfg_layout.addRow("Sub style:", sub_style_row)
 
@@ -1714,6 +1751,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_sub_size_spin.setValue(
             int(s.value("sub_size", 20))
         )
+        self.ns_sub_margin_v_spin.setValue(
+            int(s.value("sub_margin_v", 30))
+        )
 
     def _save_netshort_settings(self):
         """Persist current NetShort UI control values to QSettings."""
@@ -1726,6 +1766,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         s.setValue("crf", self.ns_crf_spin.value())
         s.setValue("sub_font", self.ns_sub_font_combo.currentText())
         s.setValue("sub_size", self.ns_sub_size_spin.value())
+        s.setValue("sub_margin_v", self.ns_sub_margin_v_spin.value())
 
     # -------------------------------------------------------------------------
     # NetShort UI handlers
@@ -1839,7 +1880,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             )
 
     def _ns_add_movie_to_table(self, movie: NSMovie):
-        """Insert a new row for the movie into the queue table with a Remove button."""
+        """Insert a new row for the movie into the queue table with action buttons."""
         row = self.ns_table.rowCount()
         self.ns_table.insertRow(row)
 
@@ -1848,23 +1889,120 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                               QtWidgets.QTableWidgetItem(str(movie.total)))
         self.ns_table.setItem(row, 2, QtWidgets.QTableWidgetItem(
             str(movie.selected_count)))
-        status_item = QtWidgets.QTableWidgetItem("Ready")
-        self.ns_table.setItem(row, 3, status_item)
+        self.ns_table.setItem(row, 3, QtWidgets.QTableWidgetItem("Ready"))
+        self._ns_set_status(row, "Ready")
 
-        remove_btn = QtWidgets.QPushButton("Xoa")
-        remove_btn.clicked.connect(
-            lambda _, m=movie: self._ns_remove_movie(m)
-        )
-        self.ns_table.setCellWidget(row, 4, remove_btn)
+        btn_widget = QtWidgets.QWidget()
+        btn_layout = QtWidgets.QHBoxLayout(btn_widget)
+        btn_layout.setContentsMargins(2, 2, 2, 2)
+        btn_layout.setSpacing(4)
+
+        open_btn = QtWidgets.QPushButton("Mo thu muc")
+        open_btn.setToolTip("Mo thu muc chua video")
+        open_btn.clicked.connect(lambda _, m=movie: self._ns_open_movie_folder(m))
+        btn_layout.addWidget(open_btn)
+
+        open_merged_btn = QtWidgets.QPushButton("Mo merged")
+        open_merged_btn.setToolTip("Mo thu muc merged/")
+        open_merged_btn.clicked.connect(lambda _, m=movie: self._ns_open_merged_folder(m))
+        btn_layout.addWidget(open_merged_btn)
+
+        remerge_btn = QtWidgets.QPushButton("Merge lai")
+        remerge_btn.setToolTip("Xoa file merged cu va hardcode sub lai")
+        remerge_btn.clicked.connect(lambda _, m=movie: self._ns_remerge_movie(m))
+        btn_layout.addWidget(remerge_btn)
+
+        movie.remerge_btn = remerge_btn
+        self.ns_table.setCellWidget(row, 4, btn_widget)
+        self._ns_update_row_btns(movie)
+
+    def _ns_set_status(self, row: int, text: str):
+        """Set status cell text and background color based on state."""
+        item = self.ns_table.item(row, 3)
+        if item is None:
+            return
+        item.setText(text)
+        tl = text.lower()
+        if tl.startswith("done"):
+            bg = QtGui.QColor("#d4edda")
+            fg = QtGui.QColor("#155724")
+        elif "error" in tl:
+            bg = QtGui.QColor("#f8d7da")
+            fg = QtGui.QColor("#721c24")
+        elif tl == "ready":
+            bg = QtGui.QColor("#fff3cd")
+            fg = QtGui.QColor("#856404")
+        else:
+            bg = QtGui.QColor("#d1ecf1")
+            fg = QtGui.QColor("#0c5460")
+        item.setBackground(QtGui.QBrush(bg))
+        item.setForeground(QtGui.QBrush(fg))
+
+    def _ns_update_row_btns(self, movie: NSMovie):
+        """Update visibility of per-row action buttons."""
+        worker_running = self.nsworker and self.nsworker.isRunning()
+        has_done = any(e.selected and e.status == "done" for e in movie.episodes)
+        if hasattr(movie, "remerge_btn"):
+            movie.remerge_btn.setVisible(not worker_running and has_done)
 
     def _ns_remove_movie(self, movie: NSMovie):
         """Remove a movie from the queue list and its corresponding table row."""
         if movie in self.nsmovies:
             idx = self.nsmovies.index(movie)
             self.nsmovies.remove(movie)
+            if hasattr(movie, "remerge_btn"):
+                del movie.remerge_btn
             self.ns_table.removeRow(idx)
             if not self.nsmovies:
                 self.ns_start_btn.setEnabled(False)
+
+    def _ns_open_movie_folder(self, movie: NSMovie):
+        """Open the movie's save folder in the OS file explorer."""
+        folder = movie.save_dir / movie.folder_name
+        folder.mkdir(parents=True, exist_ok=True)
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(folder)))
+
+    def _ns_open_merged_folder(self, movie: NSMovie):
+        """Open the merged/ sub-folder in the OS file explorer."""
+        folder = movie.save_dir / movie.folder_name / "merged"
+        folder.mkdir(parents=True, exist_ok=True)
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(folder)))
+
+    def _ns_remerge_movie(self, movie: NSMovie):
+        """Delete merged files for done episodes and re-run the merge phase."""
+        if self.nsworker and self.nsworker.isRunning():
+            QtWidgets.QMessageBox.warning(
+                self, "Dang chay",
+                "Vui long doi tien trinh hien tai hoan tat truoc khi re-merge."
+            )
+            return
+
+        reset_count = 0
+        for ep in movie.episodes:
+            if ep.selected and ep.status == "done":
+                if ep.merged_path and ep.merged_path.exists():
+                    try:
+                        ep.merged_path.unlink()
+                    except Exception:
+                        pass
+                ep.merged_path = None
+                ep.status = "pending"
+                reset_count += 1
+
+        if reset_count == 0:
+            QtWidgets.QMessageBox.information(
+                self, "Re-merge",
+                "Khong co tap nao trang thai 'done' de re-merge.\n"
+                "Chi re-merge duoc khi tap da 'done'."
+            )
+            return
+
+        if movie in self.nsmovies:
+            row = self.nsmovies.index(movie)
+            self._ns_set_status(row, "Ready")
+
+        self._ns_log(f"Re-merge '{movie.name}': reset {reset_count} tap, bat dau lai...")
+        self._ns_on_start()
 
     def _ns_on_start(self):
         """Collect movies with pending/error episodes and kick off sequential processing."""
@@ -1874,6 +2012,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                    for e in m.episodes if e.selected)
         ]
         if not pending:
+            for m in self.nsmovies:
+                self._ns_update_row_btns(m)
             QtWidgets.QMessageBox.information(
                 self, "Hoan tat",
                 "Khong co phim nao can tai."
@@ -1884,6 +2024,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_stop_btn.setEnabled(True)
         self.ns_fetch_btn.setEnabled(False)
         self.ns_progress_bar.setValue(0)
+
+        for m in self.nsmovies:
+            self._ns_update_row_btns(m)
 
         self._ns_run_next_movie(iter(pending))
 
@@ -1905,7 +2048,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             return
 
         row = self.nsmovies.index(movie)
-        self.ns_table.item(row, 3).setText("Running...")
+        self._ns_set_status(row, "Running...")
 
         self.nsworker = NSDownloadMergeWorker(
             movie,
@@ -1916,6 +2059,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             preset="fast",
             sub_font=self.ns_sub_font_combo.currentText(),
             sub_size=self.ns_sub_size_spin.value(),
+            sub_margin_v=self.ns_sub_margin_v_spin.value(),
         )
         self.nsworker.log_msg.connect(self._ns_log)
         self.nsworker.progress.connect(self._ns_on_progress)
@@ -1923,7 +2067,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             lambda ep_num, st, m=movie, r=row: self._ns_on_episode_status(m, r, ep_num, st)
         )
         self.nsworker.finished_all.connect(
-            lambda: self._ns_on_movie_done(row)
+            lambda m=movie: self._ns_on_movie_done(m)
         )
         self._ns_iterator = iterator
         self.nsworker.start()
@@ -1942,19 +2086,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if e.selected and e.status == "done"
         )
         total_sel = movie.selected_count
-        self.ns_table.item(row, 3).setText(f"{status} ({done_count}/{total_sel})")
+        self._ns_set_status(row, f"{status} ({done_count}/{total_sel})")
 
-    def _ns_on_movie_done(self, row: int):
+    def _ns_on_movie_done(self, movie: NSMovie):
         """Mark movie row as Done and advance the iterator to the next movie."""
-        if not self.nsmovies:
+        if movie not in self.nsmovies:
             return
-        movie = self.nsmovies[row]
+        row = self.nsmovies.index(movie)
         ok = sum(
             1 for e in movie.episodes
             if e.selected and e.status == "done"
         )
         total = movie.selected_count
-        self.ns_table.item(row, 3).setText(f"Done {ok}/{total}")
+        self._ns_set_status(row, f"Done {ok}/{total}")
+        self._ns_update_row_btns(movie)
 
         if self._ns_iterator is None:
             return
