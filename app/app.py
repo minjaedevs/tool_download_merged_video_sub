@@ -1646,9 +1646,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     self.config["presets"].update(loaded.get("presets", {}))
             except Exception:
                 logger.warning("Config load failed, using defaults.")
-        elif (ROOT / "config.toml").exists():
+        elif (ROOT / "root" / "config.toml").exists():
             try:
-                self.config = load_toml(ROOT / "config.toml")
+                self.config = load_toml(ROOT / "root" / "config.toml")
                 save_toml(config_path, self.config)
                 logger.info("Copied default config to user data dir.")
             except Exception:

@@ -4,15 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       nightly:
-        description: 'minjae build'
+        description: 'nightly build (git sha version)'
         type: boolean
         default: false
+      version:
+        description: 'version tag for production release (e.g. 0.9.1)'
+        type: string
+        default: ''
 
 permissions:
   contents: write
 
 env:
   QT_QPA_PLATFORM: offscreen
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-windows:
@@ -37,18 +42,19 @@ jobs:
         shell: bash
         run: |
           short_sha=$(git rev-parse --short HEAD)
-          current_date=$(date +%Y.%m.%d)
 
           if [[ "${{ github.event.inputs.nightly }}" == 'true' ]]; then
-            version=$short_sha
+            version="nightly-$short_sha"
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            version="${{ github.event.inputs.version }}"
           else
-            version=$current_date
+            echo "::error::Production release requires a version tag. Set the 'version' input."
+            exit 1
           fi
 
           echo "Version: $version"
           echo "short_sha=$short_sha" >> $GITHUB_OUTPUT
           echo "version=$version"       >> $GITHUB_OUTPUT
-          echo "short_date=$current_date" >> $GITHUB_OUTPUT
 
       - name: Patch version strings
         working-directory: ./app
@@ -97,7 +103,7 @@ jobs:
         with:
           tag_name: nightly
           body: |
-            Nightly build – ${{ steps.version.outputs.short_date }} – `[${{ steps.version.outputs.short_sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})`
+            Version ${{ steps.version.outputs.version }} – `[${{ steps.version.outputs.short_sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})`
           generate_release_notes: false
           draft: false
           prerelease: true
@@ -111,7 +117,7 @@ jobs:
         if: ${{ github.event.inputs.nightly == 'false' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
           generate_release_notes: true
           draft: false
           prerelease: false

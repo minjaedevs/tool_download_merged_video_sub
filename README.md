@@ -225,3 +225,9 @@ app\setup_check.bat
 > Output EXE là `app/dist/yt-dlp-gui.exe`. Copy vào `app/release/yt-dlp-gui-vX.Y.Z/` rồi ZIP để phân phối.
 
 > Nếu có lỗi khi chạy, kiểm tra file `debug.log` trong thư mục ứng dụng.
+
+pyinstaller --name=yt-dlp-gui --clean -y app.py `
+  --icon ./assets/yt-dlp-gui.ico `
+  --add-data "config.toml;." `
+  --add-data "assets;assets" `
+  --noconsole
