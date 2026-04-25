@@ -76,26 +76,23 @@ jobs:
         working-directory: ./app
         shell: bash
         run: |
-          pyinstaller --name=yt-dlp-gui --clean -y app.py \
-            --icon ./assets/yt-dlp-gui.ico \
-            --add-data "config.toml;." \
-            --add-data "assets;assets" \
-            --noconsole
+          pyinstaller --clean -y yt-dlp-gui.spec
 
       - name: Package for distribution
         working-directory: ./app
         shell: pwsh
         run: |
+          # With --onefile, output is a single exe at dist/yt-dlp-gui.exe
           # Create zip (for manual download)
-          Compress-Archive -Path dist/yt-dlp-gui/* -DestinationPath ./yt-dlp-gui-win64.zip
+          Compress-Archive -Path dist/yt-dlp-gui.exe -DestinationPath ./yt-dlp-gui-win64.zip
 
           # Create a directory for release assets
           New-Item -ItemType Directory -Force release-assets | Out-Null
           # Copy the standalone .exe so it can be uploaded as a release asset
-          Copy-Item dist/yt-dlp-gui/yt-dlp-gui.exe release-assets/
+          Copy-Item dist/yt-dlp-gui.exe release-assets/
 
-          Write-Host "=== dist/yt-dlp-gui/ contents ==="
-          Get-ChildItem dist/yt-dlp-gui/
+          Write-Host "=== dist/ contents ==="
+          Get-ChildItem dist/
 
       - name: Upload nightly release
         if: ${{ github.event.inputs.nightly == 'true' }}

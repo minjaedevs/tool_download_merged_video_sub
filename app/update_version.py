@@ -40,7 +40,7 @@ def _get_version() -> str:
         from _version import __version__
         return __version__
     except ImportError:
-        return "1.0.0"
+        return "0.0.0"
 
 
 def _get_github_repo() -> str | None:
@@ -152,6 +152,7 @@ class Updater(QObject):
         self.parent = parent
         self._progress_dlg: QProgressDialog | None = None
         self._check_worker: CheckWorker | None = None
+        self._latest_tag: str = ""
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -217,6 +218,7 @@ class Updater(QObject):
             f"Phiên bản mới: {latest_tag}\n\n"
             f"{notes[:500]}\n\nTải và cập nhật ngay?",
         )
+        self._latest_tag = latest_tag
         if ret == QMessageBox.Yes:
             self._download(asset["browser_download_url"])
 
@@ -260,6 +262,8 @@ class Updater(QObject):
     def _on_downloaded(self, new_exe_path: str) -> None:
         if self._progress_dlg:
             self._progress_dlg.setValue(100)
+            self._progress_dlg.close()
+            self._progress_dlg = None
 
         self._install(new_exe_path)
 
@@ -269,8 +273,8 @@ class Updater(QObject):
 
         The trick:
           1. Write a .bat script to a temp directory.
-          2. The bat waits 2 s, moves the new exe over the current one,
-             then relaunches the app and deletes itself.
+          2. The bat waits 2 s then retries moving the new exe over the current
+             one (up to 30 attempts, 1 s apart) until the file lock is released.
           3. Launch the bat detached and close the current app.
         """
         current_exe = _get_current_exe()
@@ -280,8 +284,22 @@ class Updater(QObject):
         bat_content = (
             '@echo off\n'
             'timeout /t 2 /nobreak >nul\n'
-            f'move /y "{new_exe}" "{current_exe}"\n'
+            # Retry loop: wait until the running exe is released (max 30 attempts)
+            'set /a retries=0\n'
+            ':retry\n'
+            f'move /y "{new_exe}" "{current_exe}" >nul 2>&1\n'
+            'if errorlevel 1 (\n'
+            '    set /a retries+=1\n'
+            '    if %retries% geq 30 goto failed\n'
+            '    timeout /t 1 /nobreak >nul\n'
+            '    goto retry\n'
+            ')\n'
             f'start "" "{current_exe}"\n'
+            'goto cleanup\n'
+            ':failed\n'
+            f'echo Failed to replace executable after 30 retries. New version is at: "{new_exe}"\n'
+            'pause\n'
+            ':cleanup\n'
             'del "%~f0"\n'
         )
 
@@ -294,7 +312,6 @@ class Updater(QObject):
             )
             return
 
-        # Launch bat detached and exit
         try:
             subprocess.Popen(
                 ["cmd", "/c", str(bat_path)],
@@ -312,5 +329,4 @@ class Updater(QObject):
             )
             return
 
-        # Close the app so the bat can replace the exe
         self.parent.close()
