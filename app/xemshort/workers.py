@@ -341,11 +341,15 @@ class XSDownloadMergeWorker(QtCore.QThread):
 
         sub_filter = _ns_escape_path(ep.sub_path)
 
-        # Locate bundled fonts directory (next to EXE first, then next to app/ dir)
+        # Locate bundled fonts directory:
+        # 1) next to EXE (user-placed)
+        # 2) app/fonts/ (dev mode)
+        # 3) app/root/fonts/ or _MEIPASS/root/fonts/ (PyInstaller bundle via --add-data=root;root)
         fonts_dir = Path(sys.executable).parent / "fonts"
         if not fonts_dir.exists():
-            # __file__ = app/xemshort/workers.py  →  .parent.parent = app/
             fonts_dir = Path(__file__).parent.parent / "fonts"
+        if not fonts_dir.exists():
+            fonts_dir = Path(__file__).parent.parent / "root" / "fonts"
 
         if fonts_dir.exists():
             _ns_install_fonts(fonts_dir, self.log)
