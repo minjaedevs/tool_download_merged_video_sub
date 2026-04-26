@@ -357,6 +357,23 @@ def _ns_detect_sub_ext(content: bytes) -> str:
     return "txt"
 
 
+_COLOR_TO_HEX = {
+    "Trắng": "#FFFFFF", "Vàng": "#FFD700", "Xanh dương": "#00BFFF",
+    "Đỏ": "#FF6B6B", "Xanh lá": "#00FF7F", "Cam": "#FFA500",
+    "Hồng": "#FF69B4", "Tím": "#DA70D6", "Lục": "#90EE90",
+    "Xám sáng": "#D3D3D3",
+}
+
+def _ns_color_to_ass(color_str: str) -> str:
+    """Convert a color name or hex string to ASS &HAABBGGRR format."""
+    hex_val = _COLOR_TO_HEX.get(color_str, color_str) if color_str else "#FFFFFF"
+    hex_val = hex_val.lstrip("#")
+    if len(hex_val) == 6:
+        r, g, b = hex_val[0:2], hex_val[2:4], hex_val[4:6]
+        return f"&H00{b.upper()}{g.upper()}{r.upper()}"
+    return "&H00FFFFFF"
+
+
 def _ns_check_ffmpeg() -> bool:
     """Return True if ffmpeg is available (bundled next to EXE or on system PATH)."""
     # Check bundled ffmpeg next to the executable first
@@ -1061,6 +1078,65 @@ class NSVttEditorDialog(QtWidgets.QDialog):
 
 
 # ============================================================================
+# PHONE MOCKUP WIDGET (used by subtitle preview)
+# ============================================================================
+
+class _NSPhoneMockup(QtWidgets.QWidget):
+    """Draws a rounded phone bezel around a screen pixmap."""
+
+    BEZEL  = 18   # bezel thickness in px
+    RADIUS = 28   # outer corner radius
+
+    def __init__(self, screen_pixmap: QtGui.QPixmap, screen_w: int, screen_h: int, parent=None):
+        super().__init__(parent)
+        self._pix = screen_pixmap
+        self._sw  = screen_w
+        self._sh  = screen_h
+        total_w   = screen_w + self.BEZEL * 2
+        total_h   = screen_h + self.BEZEL * 2 + 32  # +32 for home button area
+        self.setFixedSize(total_w, total_h)
+
+    def paintEvent(self, event):  # noqa: N802
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+
+        bz = self.BEZEL
+        total_w = self._sw + bz * 2
+        total_h = self._sh + bz * 2 + 32
+
+        # Phone body
+        body_rect = QtCore.QRectF(0, 0, total_w, total_h)
+        painter.setPen(QtGui.QPen(QtGui.QColor("#555"), 1.5))
+        painter.setBrush(QtGui.QColor("#222"))
+        painter.drawRoundedRect(body_rect, self.RADIUS, self.RADIUS)
+
+        # Screen
+        screen_rect = QtCore.QRect(bz, bz, self._sw, self._sh)
+        painter.drawPixmap(screen_rect, self._pix)
+
+        # Screen inner border
+        painter.setPen(QtGui.QPen(QtGui.QColor("#000"), 1))
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        painter.drawRect(screen_rect)
+
+        # Home button
+        cx = total_w // 2
+        cy  = self._sh + bz + 16
+        painter.setPen(QtGui.QPen(QtGui.QColor("#666"), 1.5))
+        painter.setBrush(QtGui.QColor("#333"))
+        painter.drawEllipse(cx - 11, cy - 11, 22, 22)
+
+        # Small notch at top
+        notch_w, notch_h = 60, 10
+        notch_x = (total_w - notch_w) // 2
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(QtGui.QColor("#333"))
+        painter.drawRoundedRect(notch_x, 4, notch_w, notch_h, 5, 5)
+
+        painter.end()
+
+
+# ============================================================================
 # NS VIDEO POPUP (simple info popup)
 # ============================================================================
 
@@ -1212,7 +1288,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
     def __init__(self, movie: NSMovie, concurrency: int, download_sub: bool,
                  do_merge: bool, crf: int, preset: str,
                  sub_font: str = "UTM Alter Gothic", sub_size: int = 20,
-                 sub_margin_v: int = 30):
+                 sub_margin_v: int = 30, sub_color: str = "Trắng"):
         """Configure worker with movie data, thread count, and ffmpeg encode settings."""
         super().__init__()
         self.movie = movie
@@ -1224,6 +1300,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
         self.sub_font = sub_font
         self.sub_size = sub_size
         self.sub_margin_v = sub_margin_v
+        self.sub_color = sub_color
         import threading
         self._stop = threading.Event()
 
@@ -1416,16 +1493,20 @@ class NSDownloadMergeWorker(QtCore.QThread):
                 f"subtitles='{sub_filter}'"
                 f":fontsdir='{fonts_dir_escaped}'"
                 f":force_style='FontName={self.sub_font},FontSize={self.sub_size},"
-                f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                f"BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV={self.sub_margin_v}'"
+                f"PrimaryColour={_ns_color_to_ass(self.sub_color)},"
+                f"OutlineColour=&H00000000,"
+                f"BorderStyle=1,Outline=1,Shadow=0,Bold=-1,"
+                f"Alignment=2,MarginV={self.sub_margin_v}'"
             )
         else:
             self.log("CẢNH BÁO: không tìm thấy thư mục fonts/ -- dùng font hệ thống")
             vf_filter = (
                 f"subtitles='{sub_filter}':force_style="
                 f"'FontName={self.sub_font},FontSize={self.sub_size},"
-                f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                f"BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV={self.sub_margin_v}'"
+                f"PrimaryColour={_ns_color_to_ass(self.sub_color)},"
+                f"OutlineColour=&H00000000,"
+                f"BorderStyle=1,Outline=1,Shadow=0,Bold=-1,"
+                f"Alignment=2,MarginV={self.sub_margin_v}'"
             )
 
         # Get exact source duration to pin output length
@@ -1836,8 +1917,47 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "Mặc định: 30"
         )
         sub_style_row.addWidget(self.ns_sub_margin_v_spin)
+        sub_style_row.addSpacing(16)
+        sub_style_row.addWidget(QtWidgets.QLabel("Màu:"))
+        self.ns_sub_color_combo = QtWidgets.QComboBox()
+        self.ns_sub_color_combo.setEditable(True)
+        self.ns_sub_color_combo.setMinimumWidth(90)
+        _color_presets = [
+            ("Trắng",         "#FFFFFF"),
+            ("Vàng",          "#FFD700"),
+            ("Xanh dương",    "#00BFFF"),
+            ("Đỏ",            "#FF6B6B"),
+            ("Xanh lá",       "#00FF7F"),
+            ("Cam",           "#FFA500"),
+            ("Hồng",          "#FF69B4"),
+            ("Tím",           "#DA70D6"),
+            ("Lục",           "#90EE90"),
+            ("Xám sáng",      "#D3D3D3"),
+        ]
+        for _label, _hex in _color_presets:
+            self.ns_sub_color_combo.addItem(_label, _hex)
+        self.ns_sub_color_combo.setCurrentIndex(0)  # default: Trắng
+        self.ns_sub_color_combo.setToolTip(
+            "Màu chữ phụ đề.\n"
+            "Có thể gõ mã hex bất kỳ (VD: #FF0000)"
+        )
+        sub_style_row.addWidget(self.ns_sub_color_combo)
         sub_style_row.addStretch()
         cfg_layout.addRow("Sub style:", sub_style_row)
+
+        # Preview buttons row
+        preview_row = QtWidgets.QHBoxLayout()
+        preview_row.addWidget(QtWidgets.QLabel("Xem trước:"))
+        btn_full = QtWidgets.QPushButton("Full màn hình phone")
+        btn_full.clicked.connect(self._ns_preview_full)
+        btn_full.setToolTip("Video 9:16 lấp đầy màn hình điện thoại")
+        preview_row.addWidget(btn_full)
+        btn_169 = QtWidgets.QPushButton("Video 16:9 trên phone")
+        btn_169.clicked.connect(self._ns_preview_169)
+        btn_169.setToolTip("Video 16:9 nằm giữa màn hình điện thoại, đen trên/dưới")
+        preview_row.addWidget(btn_169)
+        preview_row.addStretch()
+        cfg_layout.addRow("", preview_row)
 
         ns_layout.addWidget(cfg)
 
@@ -2445,6 +2565,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_sub_margin_v_spin.setValue(
             int(s.value("sub_margin_v", 30))
         )
+        self.ns_sub_color_combo.setCurrentText(
+            s.value("sub_color", "Trắng")
+        )
 
     def _save_netshort_settings(self):
         """Persist current NetShort UI control values to QSettings."""
@@ -2458,6 +2581,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         s.setValue("sub_font", self.ns_sub_font_combo.currentText())
         s.setValue("sub_size", self.ns_sub_size_spin.value())
         s.setValue("sub_margin_v", self.ns_sub_margin_v_spin.value())
+        s.setValue("sub_color", self.ns_sub_color_combo.currentText())
 
     # -------------------------------------------------------------------------
     # NetShort UI handlers
@@ -2675,7 +2799,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if hasattr(movie, "remerge_btn"):
             movie.remerge_btn.setVisible(not worker_running and has_done)
         if hasattr(movie, "delete_btn"):
-            movie.delete_btn.setEnabled(not worker_running)
+            movie.delete_btn.setVisible(not worker_running)
 
     def _ns_remove_movie(self, movie: NSMovie):
         """Remove a movie from the queue list and its corresponding table row."""
@@ -2794,6 +2918,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             sub_font=self.ns_sub_font_combo.currentText(),
             sub_size=self.ns_sub_size_spin.value(),
             sub_margin_v=self.ns_sub_margin_v_spin.value(),
+            sub_color=self.ns_sub_color_combo.currentText(),
         )
         self.nsworker.log_msg.connect(self._ns_log)
         self.nsworker.progress.connect(self._ns_on_progress)
@@ -2910,6 +3035,143 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         elif col == 2:
             # VTT — mở editor
             NSVttEditorDialog(path, dlg).exec()
+
+    def _ns_preview_169(self):
+        """Show a 16:9 subtitle preview (1280x720, real video resolution)."""
+        self._ns_show_sub_preview(aspect="16:9")
+
+    def _ns_preview_full(self):
+        """Show a full-screen (2.35:1) subtitle preview."""
+        self._ns_show_sub_preview(aspect="full")
+
+    def _ns_show_sub_preview(self, aspect: str):
+        """Phone-mockup subtitle preview.
+
+        aspect="full"  → 9:16 vertical video fills phone screen entirely.
+        aspect="16:9"  → 16:9 horizontal video centred on phone, black bars top/bottom.
+        """
+        font_name  = self.ns_sub_font_combo.currentText().strip() or "Arial"
+        font_size  = self.ns_sub_size_spin.value()
+        margin_v   = self.ns_sub_margin_v_spin.value()
+        color_name = self.ns_sub_color_combo.currentText()
+        color_hex  = _COLOR_TO_HEX.get(color_name, color_name) if color_name else "#FFFFFF"
+
+        # ── Phone canvas (full render resolution) ───────────────────────────
+        PHONE_W, PHONE_H = 720, 1280
+
+        if aspect == "full":
+            # 9:16 vertical video — fills entire phone screen
+            vid_x, vid_y = 0, 0
+            vid_w, vid_h = PHONE_W, PHONE_H
+            aspect_label = "Full màn hình phone (9:16)"
+        else:
+            # 16:9 horizontal video centred on phone
+            vid_w = PHONE_W
+            vid_h = PHONE_W * 9 // 16      # 405 px
+            vid_x = 0
+            vid_y = (PHONE_H - vid_h) // 2  # 437 px
+            aspect_label = "Video 16:9 trên phone"
+
+        sample_lines = [
+            "Phụ đề mẫu  /  Sample subtitle",
+            "行  高棉  เชงเม้ง",
+        ]
+
+        # ── Draw phone canvas ────────────────────────────────────────────────
+        pixmap = QtGui.QPixmap(PHONE_W, PHONE_H)
+        pixmap.setDevicePixelRatio(1.0)
+        pixmap.fill(QtGui.QColor("#111111"))
+
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+
+        # Black bars outside video region (16:9 mode)
+        if aspect == "16:9":
+            painter.fillRect(0, 0, PHONE_W, vid_y, QtGui.QColor("#000000"))
+            painter.fillRect(0, vid_y + vid_h, PHONE_W,
+                             PHONE_H - vid_y - vid_h, QtGui.QColor("#000000"))
+
+        # Video scene background
+        painter.fillRect(vid_x, vid_y, vid_w, vid_h, QtGui.QColor("#1a1a2e"))
+        grad = QtGui.QLinearGradient(vid_x, vid_y, vid_x, vid_y + vid_h)
+        grad.setColorAt(0.0, QtGui.QColor(40, 40, 80, 100))
+        grad.setColorAt(1.0, QtGui.QColor(0, 0, 0, 200))
+        painter.fillRect(vid_x, vid_y, vid_w, vid_h, grad)
+
+        # ── Subtitle text ────────────────────────────────────────────────────
+        font = QtGui.QFont(font_name, font_size)
+        font.setBold(True)
+        painter.setFont(font)
+
+        text_color    = QtGui.QColor(color_hex)
+        outline_color = QtGui.QColor(0, 0, 0, 255)
+        outline_size  = max(2, int(font_size * 0.13))
+
+        fm           = QtGui.QFontMetrics(font)
+        line_spacing = int(font_size * 0.3)
+        total_th     = len(sample_lines) * (fm.height() + line_spacing) - line_spacing
+
+        # Bottom of video region minus MarginV (mirrors ASS Alignment=2 MarginV)
+        vid_bottom  = vid_y + vid_h
+        text_y_base = vid_bottom - margin_v - total_th
+
+        max_tw  = max(fm.horizontalAdvance(line) for line in sample_lines)
+        text_x  = (PHONE_W - max_tw) // 2
+
+        y = text_y_base + fm.ascent()
+        for line in sample_lines:
+            x = text_x
+            for dx in range(-outline_size, outline_size + 1):
+                for dy in range(-outline_size, outline_size + 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    painter.setPen(outline_color)
+                    painter.drawText(int(x + dx), int(y + dy), line)
+            painter.setPen(text_color)
+            painter.drawText(int(x), int(y), line)
+            y += fm.height() + line_spacing
+
+        painter.end()
+
+        # ── Scale to display size (~360×640) ─────────────────────────────────
+        scaled = pixmap.scaled(
+            360, 640,
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+
+        # ── Build dialog ─────────────────────────────────────────────────────
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle(
+            f"Preview  |  {aspect_label}  |  {font_name}  {font_size}px  |  {color_name}"
+        )
+        dlg.setStyleSheet("QDialog { background: #1a1a1a; }")
+
+        main_layout = QtWidgets.QVBoxLayout(dlg)
+        main_layout.setContentsMargins(24, 20, 24, 14)
+        main_layout.setSpacing(10)
+
+        # Phone mockup
+        phone_widget = _NSPhoneMockup(scaled, scaled.width(), scaled.height(), dlg)
+        main_layout.addWidget(phone_widget, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+
+        # Info bar
+        info = (
+            f"Font: {font_name}  |  Size: {font_size}  |  MarginV: {margin_v}"
+            f"  |  Color: {color_hex}  |  Bold: On"
+        )
+        info_lbl = QtWidgets.QLabel(info)
+        info_lbl.setStyleSheet(
+            "QLabel { color: #aaa; background: #0d0d0d; font-size: 11px;"
+            " padding: 5px 10px; border-radius: 4px; }"
+        )
+        info_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(info_lbl)
+
+        dlg.adjustSize()
+        dlg.exec()
+
 
     def _ns_on_stop(self):
         """Signal the active worker to stop and reset the UI button states."""
