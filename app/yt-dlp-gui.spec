@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('assets', 'assets'), ('config.toml', 'root')]
+datas = [('assets', 'assets'), ('root', 'root')]
 binaries = []
 hiddenimports = ['httpx', 'anyio', 'charset_normalizer', 'certifi', 'platformdirs', 'httpx_sse']
 tmp_ret = collect_all('qtawesome')

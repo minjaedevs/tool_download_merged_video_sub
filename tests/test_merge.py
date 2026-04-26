@@ -16,19 +16,14 @@ import sys
 import unittest
 from pathlib import Path
 
-# ── Qt bootstrap (must happen before any PySide6 import in app) ─────────────
 from PySide6.QtCore import QCoreApplication
 _qt_app = QCoreApplication.instance() or QCoreApplication(sys.argv)
 
 # ── add app/ to path ───────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
-from app import (          # noqa: E402
-    NSEpisode,
-    NSMovie,
-    NSDownloadMergeWorker,
-    _ns_get_video_duration_secs,
-)
+from xemshort import NSEpisode, NSMovie, NSDownloadMergeWorker  # noqa: E402
+from xemshort.helpers import _ns_get_video_duration_secs  # noqa: E402
 
 # ── test data paths ────────────────────────────────────────────────────────
 _BASE = Path(r"C:\Users\Pc\Downloads\NetShort\Khoa Học Viễn Tưởng VS Kiếm Hiệp Tu Tiên")
