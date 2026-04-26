@@ -83,7 +83,7 @@ class _NSPhoneMockup(QtWidgets.QWidget):
 # ============================================================================
 
 
-class NSVideoPopup(QtWidgets.QDialog):
+class XSVideoPopup(QtWidgets.QDialog):
     """Simple popup showing video file info and open button."""
 
     def __init__(self, video_path: Path, parent=None):
@@ -145,7 +145,7 @@ class NSVideoPopup(QtWidgets.QDialog):
 # ============================================================================
 
 
-class NSDetailDialog(QtWidgets.QDialog):
+class XSDetailDialog(QtWidgets.QDialog):
     """Dialog showing per-episode details: tập phim, video gốc, VTT, video merged, báo cáo."""
 
     def __init__(self, movie: XSMovie, parent=None):
@@ -423,7 +423,7 @@ class NSDetailDialog(QtWidgets.QDialog):
 # ============================================================================
 
 
-class NSVttEditorDialog(QtWidgets.QDialog):
+class XSVttEditorDialog(QtWidgets.QDialog):
     """Dialog for editing a VTT subtitle file with search and analysis."""
 
     def __init__(self, vtt_path: Path, parent=None):
@@ -606,7 +606,7 @@ class NSVttEditorDialog(QtWidgets.QDialog):
 # ============================================================================
 
 
-class NSEpisodePickerDialog(QtWidgets.QDialog):
+class XSEpisodePickerDialog(QtWidgets.QDialog):
     """Dialog for selecting which episodes to add to the download queue."""
 
     def __init__(self, movie_name: str, episodes: list[XSEpisode], parent=None):
@@ -722,7 +722,7 @@ class NSEpisodePickerDialog(QtWidgets.QDialog):
 # ============================================================================
 
 
-class NSPasteJsonDialog(QtWidgets.QDialog):
+class XSPasteJsonDialog(QtWidgets.QDialog):
     """Dialog for pasting raw JSON API response text."""
 
     def __init__(self, parent=None):
@@ -750,3 +750,11 @@ class NSPasteJsonDialog(QtWidgets.QDialog):
         except json.JSONDecodeError as e:
             QtWidgets.QMessageBox.warning(self, "Lỗi", f"JSON không hợp lệ: {e}")
             return None
+
+
+# Backward-compat aliases
+NSVideoPopup = XSVideoPopup
+NSDetailDialog = XSDetailDialog
+NSEpisodePickerDialog = XSEpisodePickerDialog
+NSPasteJsonDialog = XSPasteJsonDialog
+NSVttEditorDialog = XSVttEditorDialog

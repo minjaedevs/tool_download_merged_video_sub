@@ -2,10 +2,17 @@
 from .models import NSMovie, NSEpisode, XSEpisode, XSMovie
 from .workers import NSDownloadMergeWorker, NSFetchWorker, XSDownloadMergeWorker, XSFetchWorker
 from .dialogs import (
+    XSDetailDialog,
+    XSEpisodePickerDialog,
+    XSPasteJsonDialog,
+    XSVideoPopup,
+    XSVttEditorDialog,
+    # backward-compat aliases
     NSDetailDialog,
     NSEpisodePickerDialog,
     NSPasteJsonDialog,
     NSVideoPopup,
+    NSVttEditorDialog,
 )
 from .tab import XemShortTab
 
@@ -15,8 +22,11 @@ __all__ = [
     # workers
     "NSFetchWorker", "NSDownloadMergeWorker",
     "XSFetchWorker", "XSDownloadMergeWorker",
-    # dialogs
-    "NSDetailDialog", "NSEpisodePickerDialog", "NSPasteJsonDialog", "NSVideoPopup",
+    # dialogs (XS = current, NS = backward-compat)
+    "XSDetailDialog", "XSEpisodePickerDialog", "XSPasteJsonDialog",
+    "XSVideoPopup", "XSVttEditorDialog",
+    "NSDetailDialog", "NSEpisodePickerDialog", "NSPasteJsonDialog",
+    "NSVideoPopup", "NSVttEditorDialog",
     # tab
     "XemShortTab",
 ]

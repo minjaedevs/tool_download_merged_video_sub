@@ -15,15 +15,15 @@ from PySide6.QtCore import QSettings
 
 from .cache import _NS_FETCH_CACHE_TTL, _ns_cache_clear, _ns_cache_evict_expired
 from .dialogs import (
-    NSDetailDialog,
-    NSEpisodePickerDialog,
-    NSPasteJsonDialog,
-    NSVideoPopup,
+    XSDetailDialog,
+    XSEpisodePickerDialog,
+    XSPasteJsonDialog,
+    XSVideoPopup,
     _NSPhoneMockup,
 )
 from .helpers import _COLOR_TO_HEX, _ns_check_ffmpeg, _ns_load_bundled_fonts, _ns_color_to_ass
-from .models import NSMovie, NSEpisode
-from .workers import NSDownloadMergeWorker, NSFetchWorker
+from .models import XSMovie, XSEpisode
+from .workers import XSDownloadMergeWorker, XSFetchWorker
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -43,8 +43,8 @@ class XemShortTab(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.movies: list[NSMovie] = []
-        self.nsworker: NSDownloadMergeWorker | None = None
+        self.movies: list[XSMovie] = []
+        self.nsworker: XSDownloadMergeWorker | None = None
         self._ns_iterator = None
         self._build_ui()
 
@@ -372,7 +372,7 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_status.setText(f"Đang fetch {movie_id}...")
         self._log(f"Fetching {movie_id}...")
 
-        self.nsfetch_worker = NSFetchWorker(api_url, movie_id)
+        self.nsfetch_worker = XSFetchWorker(api_url, movie_id)
         self.nsfetch_worker.success.connect(self._ns_on_fetch_success)
         self.nsfetch_worker.cache_hit.connect(self._ns_on_fetch_cache_hit)
         self.nsfetch_worker.error.connect(self._ns_on_fetch_error)
@@ -380,13 +380,13 @@ class XemShortTab(QtWidgets.QWidget):
             lambda: self.ns_fetch_btn.setEnabled(True))
         self.nsfetch_worker.start()
 
-    def _ns_on_fetch_success(self, episodes: list[NSEpisode], movie_name: str = ""):
+    def _ns_on_fetch_success(self, episodes: list[XSEpisode], movie_name: str = ""):
         name = movie_name or (episodes[0].name if episodes else "Unknown")
         self.ns_status.setText(f"Fetched {len(episodes)} tập.")
         self._log(f"Fetched {len(episodes)} tập.")
         self._ns_show_picker(episodes, name)
 
-    def _ns_on_fetch_cache_hit(self, episodes: list[NSEpisode], movie_name: str = ""):
+    def _ns_on_fetch_cache_hit(self, episodes: list[XSEpisode], movie_name: str = ""):
         name = movie_name or (episodes[0].name if episodes else "Unknown")
         self.ns_status.setText(f"Cache hit — {len(episodes)} tập.")
         self._log(f"[cache] {len(episodes)} tập (cache hit)")
@@ -404,7 +404,7 @@ class XemShortTab(QtWidgets.QWidget):
 
     def _ns_on_paste_json(self):
         from .helpers import _ns_parse_episodes
-        dlg = NSPasteJsonDialog(self)
+        dlg = XSPasteJsonDialog(self)
         if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             data = dlg.get_json()
             if data is None:
@@ -439,14 +439,14 @@ class XemShortTab(QtWidgets.QWidget):
 
     # ── Picker ─────────────────────────────────────────────────────────────
 
-    def _ns_show_picker(self, episodes: list[NSEpisode], movie_name: str = ""):
+    def _ns_show_picker(self, episodes: list[XSEpisode], movie_name: str = ""):
         name = movie_name or (episodes[0].name if episodes else "Unknown")
-        dlg = NSEpisodePickerDialog(name, episodes, self)
+        dlg = XSEpisodePickerDialog(name, episodes, self)
         if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             selected = dlg.get_selected_episodes()
             save_dir = Path(self.ns_save_dir_edit.text() or ".")
             save_dir.mkdir(parents=True, exist_ok=True)
-            movie = NSMovie(name=name, episodes=selected, save_dir=save_dir)
+            movie = XSMovie(name=name, episodes=selected, save_dir=save_dir)
             self.movies.append(movie)
             self._ns_add_movie_to_table(movie)
             self.ns_start_btn.setEnabled(True)
@@ -461,7 +461,7 @@ class XemShortTab(QtWidgets.QWidget):
 
     # ── Table management ────────────────────────────────────────────────────
 
-    def _ns_add_movie_to_table(self, movie: NSMovie):
+    def _ns_add_movie_to_table(self, movie: XSMovie):
         row = self.ns_table.rowCount()
         self.ns_table.insertRow(row)
         self.ns_table.setItem(row, 0, QtWidgets.QTableWidgetItem(movie.name))
@@ -525,7 +525,7 @@ class XemShortTab(QtWidgets.QWidget):
         item.setBackground(QtGui.QBrush(bg))
         item.setForeground(QtGui.QBrush(fg))
 
-    def _ns_update_row_btns(self, movie: NSMovie):
+    def _ns_update_row_btns(self, movie: XSMovie):
         running = bool(self.nsworker and self.nsworker.isRunning())
         has_done = any(e.selected and e.status == "done" for e in movie.episodes)
         if hasattr(movie, "remerge_btn"):
@@ -535,7 +535,7 @@ class XemShortTab(QtWidgets.QWidget):
         if hasattr(movie, "openMerged_btn"):
             movie.openMerged_btn.setVisible(True)
 
-    def _ns_remove_movie(self, movie: NSMovie):
+    def _ns_remove_movie(self, movie: XSMovie):
         if movie in self.movies:
             idx = self.movies.index(movie)
             self.movies.remove(movie)
@@ -543,24 +543,24 @@ class XemShortTab(QtWidgets.QWidget):
             if not self.movies:
                 self.ns_start_btn.setEnabled(False)
 
-    def _ns_open_movie_folder(self, movie: NSMovie):
+    def _ns_open_movie_folder(self, movie: XSMovie):
         folder = movie.save_dir / movie.folder_name
         folder.mkdir(parents=True, exist_ok=True)
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(folder)))
 
-    def _ns_open_merged_folder(self, movie: NSMovie):
+    def _ns_open_merged_folder(self, movie: XSMovie):
         folder = movie.save_dir / movie.folder_name / "merged"
         folder.mkdir(parents=True, exist_ok=True)
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(folder)))
 
-    def _ns_show_detail(self, movie: NSMovie):
-        dlg = NSDetailDialog(movie, self)
+    def _ns_show_detail(self, movie: XSMovie):
+        dlg = XSDetailDialog(movie, self)
         dlg.table.cellDoubleClicked.connect(
             lambda row, col: self._ns_detail_cell_clicked(movie, row, col, dlg))
         dlg.exec()
 
-    def _ns_detail_cell_clicked(self, movie: NSMovie, row: int, col: int,
-                                dlg: NSDetailDialog):
+    def _ns_detail_cell_clicked(self, movie: XSMovie, row: int, col: int,
+                                dlg: XSDetailDialog):
         item = dlg.table.item(row, col)
         if item is None:
             return
@@ -571,10 +571,10 @@ class XemShortTab(QtWidgets.QWidget):
         if not path.exists():
             return
         if col == 1 or col == 3:
-            NSVideoPopup(path, dlg).exec()
+            XSVideoPopup(path, dlg).exec()
         elif col == 2:
-            from .dialogs import NSVttEditorDialog
-            NSVttEditorDialog(path, dlg).exec()
+            from .dialogs import XSVttEditorDialog
+            XSVttEditorDialog(path, dlg).exec()
 
     # ── Start / Stop / Run ─────────────────────────────────────────────────
 
@@ -614,7 +614,7 @@ class XemShortTab(QtWidgets.QWidget):
         row = self.movies.index(movie)
         self._ns_set_status(row, "Running...")
 
-        self.nsworker = NSDownloadMergeWorker(
+        self.nsworker = XSDownloadMergeWorker(
             movie,
             concurrency=self.ns_concurrency_spin.value(),
             download_sub=self.ns_sub_checkbox.isChecked(),
@@ -642,7 +642,7 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_progress_bar.setValue(pct)
         self.ns_progress_bar.setFormat(f"{done}/{total} ({pct}%)")
 
-    def _ns_on_episode_status(self, movie: NSMovie, row: int, ep_num: int, status: str):
+    def _ns_on_episode_status(self, movie: XSMovie, row: int, ep_num: int, status: str):
         done_count = sum(1 for e in movie.episodes if e.selected and e.status == "done")
         total_sel = movie.selected_count
         self._ns_set_status(row, f"{status} ({done_count}/{total_sel})")
@@ -656,7 +656,7 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_stop_btn.setEnabled(False)
         self.ns_fetch_btn.setEnabled(True)
 
-    def _ns_remerge_movie(self, movie: NSMovie):
+    def _ns_remerge_movie(self, movie: XSMovie):
         if self.nsworker and self.nsworker.isRunning():
             QtWidgets.QMessageBox.warning(self, "Đang chạy",
                                          "Vui lòng đợi tiến trình hiện tại hoàn tất.")
@@ -682,7 +682,7 @@ class XemShortTab(QtWidgets.QWidget):
         self._log(f"Re-merge '{movie.name}': reset {reset} tập, bắt đầu lại...")
         self._ns_on_start()
 
-    def _ns_on_movie_done(self, movie: NSMovie):
+    def _ns_on_movie_done(self, movie: XSMovie):
         if movie not in self.movies:
             return
         row = self.movies.index(movie)
@@ -703,7 +703,7 @@ class XemShortTab(QtWidgets.QWidget):
         self._ns_iterator = None
         self._ns_run_next_movie(iterator)
 
-    def _ns_build_result_summary(self, movie: NSMovie) -> str:
+    def _ns_build_result_summary(self, movie: XSMovie) -> str:
         sel = [e for e in movie.episodes if e.selected]
         ok = sum(1 for e in sel if e.status == "done" and e.merge_note == "ok")
         no_sub = sum(1 for e in sel if e.status == "done" and e.merge_note == "no_sub")
@@ -721,7 +721,7 @@ class XemShortTab(QtWidgets.QWidget):
             parts.append(f"❌ {err} lỗi")
         return "\n".join(parts) if parts else "—"
 
-    def _ns_format_time_info(self, movie: NSMovie) -> str:
+    def _ns_format_time_info(self, movie: XSMovie) -> str:
         if not movie.start_time:
             return "—"
         start_str = time.strftime("%H:%M:%S", time.localtime(movie.start_time))

@@ -98,7 +98,8 @@ class XSFetchWorker(QtCore.QThread):
 
         url = self.api_url.replace("{movie_id}", self.movie_id)
         try:
-            import subprocess as sp, json as _json
+            import subprocess as sp, json as _json, platform as _platform
+            _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if _platform.system() == "Windows" else {}
             result = sp.run(
                 ["curl", "-s", "--max-time", "15",
                  "-H", f"User-Agent: {NETSHORT_API_HEADERS['User-Agent']}",
@@ -107,7 +108,7 @@ class XSFetchWorker(QtCore.QThread):
                  "-H", f"Referer: {NETSHORT_API_HEADERS['Referer']}",
                  "-H", "short-source: web",
                  url],
-                capture_output=True, text=True, timeout=20
+                capture_output=True, text=True, timeout=20, **_cflags
             )
             if result.returncode != 0 or not result.stdout.strip():
                 # Fall back to requests
@@ -396,8 +397,10 @@ class XSDownloadMergeWorker(QtCore.QThread):
             cmd += ["-t", f"{orig_secs:.6f}"]
         cmd += ["-loglevel", "warning", str(out_path)]
 
+        import platform as _platform
+        _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if _platform.system() == "Windows" else {}
         try:
-            result = sp.run(cmd, capture_output=True, text=True, timeout=3600)
+            result = sp.run(cmd, capture_output=True, text=True, timeout=3600, **_cflags)
             if result.stderr.strip():
                 self.log(f"ffmpeg warning tập {ep.episode}: {result.stderr[:300]}")
             if result.returncode != 0:

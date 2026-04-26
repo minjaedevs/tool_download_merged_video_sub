@@ -245,15 +245,16 @@ def _ns_load_bundled_fonts(fonts_dir: Path) -> list[str]:
 
 def _ns_check_ffmpeg() -> bool:
     """Return True if ffmpeg is available (bundled next to EXE or on system PATH)."""
+    cflags = {"creationflags": sp.CREATE_NO_WINDOW} if platform.system() == "Windows" else {}
     bundled = Path(sys.executable).parent / "ffmpeg.exe"
     if bundled.exists():
         try:
-            sp.run([str(bundled), "-version"], capture_output=True, check=True)
+            sp.run([str(bundled), "-version"], capture_output=True, check=True, **cflags)
             return True
         except (FileNotFoundError, sp.CalledProcessError):
             pass
     try:
-        sp.run(["ffmpeg", "-version"], capture_output=True, check=True)
+        sp.run(["ffmpeg", "-version"], capture_output=True, check=True, **cflags)
         return True
     except (FileNotFoundError, sp.CalledProcessError):
         return False
@@ -262,10 +263,13 @@ def _ns_check_ffmpeg() -> bool:
 def _ns_get_video_duration_secs(path: Path) -> Optional[float]:
     """Get exact video duration in seconds (float) using ffprobe."""
     try:
+        kwargs = {}
+        if platform.system() == "Windows":
+            kwargs["creationflags"] = sp.CREATE_NO_WINDOW
         result = sp.run(
             ["ffprobe", "-v", "error", "-show_entries",
              "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, **kwargs,
         )
         if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())
