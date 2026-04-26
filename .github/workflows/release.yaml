@@ -76,10 +76,10 @@ jobs:
         working-directory: ./app
         shell: bash
         run: |
-          pyinstaller --name=yt-dlp-gui --onefile --windowed \
+          pyinstaller --name=tool-download-movie --onefile --windowed \
             --icon=assets/yt-dlp-gui.ico \
             --add-data="assets;assets" \
-            --add-data="config.toml;root" \
+            --add-data="root;root" \
             --hidden-import=httpx \
             --hidden-import=anyio \
             --hidden-import=charset_normalizer \
@@ -94,14 +94,14 @@ jobs:
         working-directory: ./app
         shell: pwsh
         run: |
-          # With --onefile, output is a single exe at dist/yt-dlp-gui.exe
+          # With --onefile, output is a single exe at dist/tool-download-movie.exe
           # Create zip (for manual download)
-          Compress-Archive -Path dist/yt-dlp-gui.exe -DestinationPath ./yt-dlp-gui-win64.zip
+          Compress-Archive -Path dist/tool-download-movie.exe -DestinationPath ./tool-download-movie-win64.zip
 
           # Create a directory for release assets
           New-Item -ItemType Directory -Force release-assets | Out-Null
           # Copy the standalone .exe so it can be uploaded as a release asset
-          Copy-Item dist/yt-dlp-gui.exe release-assets/
+          Copy-Item dist/tool-download-movie.exe release-assets/
 
           Write-Host "=== dist/ contents ==="
           Get-ChildItem dist/
@@ -117,8 +117,8 @@ jobs:
           draft: false
           prerelease: true
           files: |
-            app/yt-dlp-gui-win64.zip
-            app/release-assets/yt-dlp-gui.exe
+            app/tool-download-movie-win64.zip
+            app/release-assets/tool-download-movie.exe
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
@@ -131,7 +131,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            app/yt-dlp-gui-win64.zip
-            app/release-assets/yt-dlp-gui.exe
+            app/tool-download-movie-win64.zip
+            app/release-assets/tool-download-movie.exe
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
