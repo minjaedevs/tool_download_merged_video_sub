@@ -114,11 +114,19 @@ class SubViewerDialog(QtWidgets.QDialog):
         self.search_input = QtWidgets.QLineEdit()
         self.search_input.setPlaceholderText("Tìm kiếm...")
         self.search_input.textChanged.connect(self._do_search)
+        _nav_style = (
+            "QPushButton { background-color: #374151; color: #d1d5db; padding: 2px 6px; "
+            "border-radius: 3px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #4b5563; }"
+            "QPushButton:disabled { background-color: #1f2937; color: #6b7280; }"
+        )
         self.btn_prev = QtWidgets.QPushButton("<")
         self.btn_prev.setFixedWidth(30)
+        self.btn_prev.setStyleSheet(_nav_style)
         self.btn_prev.clicked.connect(self._prev_match)
         self.btn_next = QtWidgets.QPushButton(">")
         self.btn_next.setFixedWidth(30)
+        self.btn_next.setStyleSheet(_nav_style)
         self.btn_next.clicked.connect(self._next_match)
         self.match_label = QtWidgets.QLabel("")
         toolbar.addWidget(QtWidgets.QLabel("Tìm:"))
@@ -140,6 +148,11 @@ class SubViewerDialog(QtWidgets.QDialog):
         self.line_count_label.setStyleSheet("color: #888; font-size: 11px")
         footer.addWidget(self.line_count_label)
         btn_close = QtWidgets.QPushButton("Đóng")
+        btn_close.setStyleSheet(
+            "QPushButton { background-color: #4b5563; color: white; padding: 4px 14px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #374151; }"
+        )
         btn_close.clicked.connect(self.close)
         footer.addStretch()
         footer.addWidget(btn_close)
@@ -345,6 +358,51 @@ def _ns_parse_episodes(data: dict | list, movie_name: str = "") -> list[NSEpisod
         ))
     episodes.sort(key=lambda e: e.episode)
     return episodes
+
+
+# ── Fetch cache ───────────────────────────────────────────────────────────────
+# key: cache_key (str)  →  value: (episodes, movie_name, timestamp_float)
+_NS_FETCH_CACHE: dict[str, tuple[list, str, float]] = {}
+_NS_FETCH_CACHE_TTL = 30 * 60   # 30 minutes in seconds
+
+
+def _ns_cache_key(api_url: str, movie_id: str) -> str:
+    """Stable cache key from api_url + movie_id."""
+    return f"{api_url.rstrip('/')}|{movie_id}"
+
+
+def _ns_cache_get(key: str) -> tuple[list, str] | None:
+    """Return (episodes, movie_name) if cache hit and not expired, else None."""
+    entry = _NS_FETCH_CACHE.get(key)
+    if entry is None:
+        return None
+    episodes, movie_name, ts = entry
+    if time.time() - ts > _NS_FETCH_CACHE_TTL:
+        del _NS_FETCH_CACHE[key]
+        return None
+    return episodes, movie_name
+
+
+def _ns_cache_set(key: str, episodes: list, movie_name: str) -> None:
+    """Store result in cache with current timestamp."""
+    _NS_FETCH_CACHE[key] = (episodes, movie_name, time.time())
+
+
+def _ns_cache_evict_expired() -> int:
+    """Remove all expired entries. Returns number of entries removed."""
+    now = time.time()
+    expired = [k for k, (_, _, ts) in _NS_FETCH_CACHE.items()
+               if now - ts > _NS_FETCH_CACHE_TTL]
+    for k in expired:
+        del _NS_FETCH_CACHE[k]
+    return len(expired)
+
+
+def _ns_cache_clear() -> int:
+    """Clear all cache entries. Returns number of entries removed."""
+    count = len(_NS_FETCH_CACHE)
+    _NS_FETCH_CACHE.clear()
+    return count
 
 
 def _ns_detect_sub_ext(content: bytes) -> str:
@@ -656,6 +714,11 @@ class NSDetailDialog(QtWidgets.QDialog):
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.addStretch()
         close_btn = QtWidgets.QPushButton("Đóng")
+        close_btn.setStyleSheet(
+            "QPushButton { background-color: #4b5563; color: white; padding: 5px 16px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #374151; }"
+        )
         close_btn.clicked.connect(self.close)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
@@ -951,7 +1014,9 @@ class NSVttEditorDialog(QtWidgets.QDialog):
         btn_row.addWidget(save_btn)
         cancel_btn = QtWidgets.QPushButton("Hủy")
         cancel_btn.setStyleSheet(
-            "QPushButton { padding: 6px 16px; border-radius: 4px; font-weight: bold; }"
+            "QPushButton { background-color: #4b5563; color: white; padding: 6px 16px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #374151; }"
         )
         cancel_btn.clicked.connect(self.close)
         btn_row.addWidget(cancel_btn)
@@ -1056,6 +1121,11 @@ class NSVttEditorDialog(QtWidgets.QDialog):
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.addStretch()
         close_btn = QtWidgets.QPushButton("Đóng")
+        close_btn.setStyleSheet(
+            "QPushButton { background-color: #4b5563; color: white; padding: 5px 16px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #374151; }"
+        )
         close_btn.clicked.connect(dlg.close)
         btn_row.addWidget(close_btn)
         dlg_layout.addLayout(btn_row)
@@ -1166,10 +1236,20 @@ class NSVideoPopup(QtWidgets.QDialog):
 
         btn_row = QtWidgets.QHBoxLayout()
         open_btn = QtWidgets.QPushButton("Mở file")
+        open_btn.setStyleSheet(
+            "QPushButton { background-color: #2563eb; color: white; padding: 5px 14px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #1d4ed8; }"
+        )
         open_btn.clicked.connect(self._open_file)
         btn_row.addWidget(open_btn)
         btn_row.addStretch()
         close_btn = QtWidgets.QPushButton("Đóng")
+        close_btn.setStyleSheet(
+            "QPushButton { background-color: #4b5563; color: white; padding: 5px 14px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #374151; }"
+        )
         close_btn.clicked.connect(self.close)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
@@ -1189,8 +1269,9 @@ class NSVideoPopup(QtWidgets.QDialog):
 class NSFetchWorker(QtCore.QThread):
     """Background thread that fetches episode list from the API."""
 
-    success = QtCore.Signal(list, str)  # episodes, movie_name
-    error = QtCore.Signal(str)
+    success   = QtCore.Signal(list, str)   # episodes, movie_name
+    cache_hit = QtCore.Signal(list, str)   # episodes, movie_name (served from cache)
+    error     = QtCore.Signal(str)
 
     def __init__(self, api_url: str, movie_id: str):
         """Store API URL and movie ID for the fetch request."""
@@ -1199,9 +1280,21 @@ class NSFetchWorker(QtCore.QThread):
         self.movie_id = movie_id
 
     def run(self):
-        """Call the API via curl OPTIONS, parse JSON, emit success or error signal."""
+        """Call the API via curl OPTIONS, parse JSON, emit success or error signal.
+
+        Checks the in-memory cache first (TTL=30 min). On miss, fetches from API
+        and stores result in cache for subsequent calls.
+        """
         import subprocess
         import json
+
+        # ── Cache check ──────────────────────────────────────────────────────
+        key = _ns_cache_key(self.api_url, self.movie_id)
+        cached = _ns_cache_get(key)
+        if cached is not None:
+            episodes, movie_name = cached
+            self.cache_hit.emit(episodes, movie_name)
+            return
 
         if "{movie_id}" in self.api_url:
             url = self.api_url.format(movie_id=self.movie_id)
@@ -1274,6 +1367,10 @@ class NSFetchWorker(QtCore.QThread):
             return
 
         movie_name = data.get("shortPlayName", "") if isinstance(data, dict) else ""
+
+        # ── Write to cache ───────────────────────────────────────────────────
+        _ns_cache_set(key, episodes, movie_name)
+
         self.success.emit(episodes, movie_name)
 
 
@@ -1649,7 +1746,17 @@ class NSEpisodePickerDialog(QtWidgets.QDialog):
 
         btn_row = QtWidgets.QHBoxLayout()
         self.select_all_btn = QtWidgets.QPushButton("Chọn tất cả")
+        self.select_all_btn.setStyleSheet(
+            "QPushButton { background-color: #2563eb; color: white; padding: 4px 12px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #1d4ed8; }"
+        )
         self.deselect_all_btn = QtWidgets.QPushButton("Bỏ chọn tất cả")
+        self.deselect_all_btn.setStyleSheet(
+            "QPushButton { background-color: #6b7280; color: white; padding: 4px 12px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #4b5563; }"
+        )
         self.select_all_btn.clicked.connect(lambda: self._toggle_all(True))
         self.deselect_all_btn.clicked.connect(lambda: self._toggle_all(False))
         btn_row.addWidget(self.select_all_btn)
@@ -1828,6 +1935,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._ns_iterator = None
         self._sub_dialogs = {}
 
+        # Auto-evict expired fetch cache entries every 30 minutes
+        self._ns_cache_timer = QtCore.QTimer(self)
+        self._ns_cache_timer.setInterval(_NS_FETCH_CACHE_TTL * 1000)
+        self._ns_cache_timer.timeout.connect(self._ns_evict_cache)
+        self._ns_cache_timer.start()
+
         self.updater = Updater(self)
         self.updater.check(silent=True)
 
@@ -1847,6 +1960,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ns_save_dir_edit = QtWidgets.QLineEdit()
         self.ns_save_dir_edit.setPlaceholderText("Chọn thư mục lưu...")
         browse_btn = QtWidgets.QPushButton("Browse...")
+        browse_btn.setStyleSheet(
+            "QPushButton { background-color: #374151; color: #d1d5db; padding: 4px 10px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #4b5563; }"
+        )
         browse_btn.clicked.connect(self._ns_browse_save_dir)
         save_row.addWidget(self.ns_save_dir_edit)
         save_row.addWidget(browse_btn)
@@ -1948,11 +2066,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Preview buttons row
         preview_row = QtWidgets.QHBoxLayout()
         preview_row.addWidget(QtWidgets.QLabel("Xem trước:"))
+        _preview_style = (
+            "QPushButton { background-color: #5b21b6; color: white; padding: 4px 12px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #4c1d95; }"
+        )
         btn_full = QtWidgets.QPushButton("Full màn hình phone")
+        btn_full.setStyleSheet(_preview_style)
         btn_full.clicked.connect(self._ns_preview_full)
         btn_full.setToolTip("Video 9:16 lấp đầy màn hình điện thoại")
         preview_row.addWidget(btn_full)
         btn_169 = QtWidgets.QPushButton("Video 16:9 trên phone")
+        btn_169.setStyleSheet(_preview_style)
         btn_169.clicked.connect(self._ns_preview_169)
         btn_169.setToolTip("Video 16:9 nằm giữa màn hình điện thoại, đen trên/dưới")
         preview_row.addWidget(btn_169)
@@ -1970,14 +2095,43 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         inp_layout.addWidget(self.ns_movie_id_edit, stretch=1)
 
         self.ns_fetch_btn = QtWidgets.QPushButton("Fetch Data")
+        self.ns_fetch_btn.setStyleSheet(
+            "QPushButton { background-color: #2563eb; color: white; padding: 5px 14px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #1d4ed8; }"
+            "QPushButton:disabled { background-color: #93c5fd; color: #fff; }"
+        )
         self.ns_fetch_btn.clicked.connect(self._ns_on_fetch)
         inp_layout.addWidget(self.ns_fetch_btn)
 
+        self.ns_clear_cache_btn = QtWidgets.QPushButton("Xóa cache")
+        self.ns_clear_cache_btn.clicked.connect(self._ns_on_clear_cache)
+        self.ns_clear_cache_btn.setToolTip(
+            "Xóa cache fetch để gọi lại API ngay lập tức.\n"
+            f"Cache tự hết hạn sau {_NS_FETCH_CACHE_TTL // 60} phút."
+        )
+        self.ns_clear_cache_btn.setStyleSheet(
+            "QPushButton { background-color: #374151; color: #9ca3af; padding: 5px 10px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #7f1d1d; color: #fca5a5; }"
+        )
+        inp_layout.addWidget(self.ns_clear_cache_btn)
+
         self.ns_paste_btn = QtWidgets.QPushButton("Paste JSON")
+        self.ns_paste_btn.setStyleSheet(
+            "QPushButton { background-color: #6b7280; color: white; padding: 5px 12px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #4b5563; }"
+        )
         self.ns_paste_btn.clicked.connect(self._ns_on_paste_json)
         inp_layout.addWidget(self.ns_paste_btn)
 
         self.ns_load_btn = QtWidgets.QPushButton("Load JSON File")
+        self.ns_load_btn.setStyleSheet(
+            "QPushButton { background-color: #6b7280; color: white; padding: 5px 12px; "
+            "border-radius: 4px; }"
+            "QPushButton:hover { background-color: #4b5563; }"
+        )
         self.ns_load_btn.clicked.connect(self._ns_on_load_json)
         inp_layout.addWidget(self.ns_load_btn)
 
@@ -2613,6 +2767,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.nsfetch_worker = NSFetchWorker(api_url, movie_id)
         self.nsfetch_worker.success.connect(self._ns_on_fetch_success)
+        self.nsfetch_worker.cache_hit.connect(self._ns_on_fetch_cache_hit)
         self.nsfetch_worker.error.connect(self._ns_on_fetch_error)
         self.nsfetch_worker.finished.connect(
             lambda: self.ns_fetch_btn.setEnabled(True)
@@ -2620,11 +2775,38 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.nsfetch_worker.start()
 
     def _ns_on_fetch_success(self, episodes: list[NSEpisode], movie_name: str = ""):
-        """Handle successful fetch: update status and open the episode picker."""
+        """Handle successful API fetch: update status and open the episode picker."""
         name = movie_name or (episodes[0].name if episodes else "Unknown")
         self.ns_status.setText(f"Fetched {len(episodes)} tập.")
         self._ns_log(f"Fetched {len(episodes)} tập.")
         self._ns_show_picker(episodes, name)
+
+    def _ns_on_fetch_cache_hit(self, episodes: list[NSEpisode], movie_name: str = ""):
+        """Handle cache hit: skip network call, open picker immediately."""
+        name = movie_name or (episodes[0].name if episodes else "Unknown")
+        remaining = max(0, int(
+            _NS_FETCH_CACHE_TTL - (time.time() - _NS_FETCH_CACHE.get(
+                _ns_cache_key(self.ns_api_url_edit.text().strip(),
+                              self.ns_movie_id_edit.text().strip()),
+                (None, None, 0)
+            )[2])
+        ))
+        mins, secs = divmod(remaining, 60)
+        self.ns_status.setText(f"Cache hit — {len(episodes)} tập (hết hạn sau {mins}p{secs:02d}s)")
+        self._ns_log(f"[cache] {len(episodes)} tập (hết hạn sau {mins}p{secs:02d}s)")
+        self._ns_show_picker(episodes, name)
+
+    def _ns_on_clear_cache(self):
+        """Manually clear all fetch cache entries."""
+        count = _ns_cache_clear()
+        self.ns_status.setText(f"Đã xóa cache ({count} mục).")
+        self._ns_log(f"[cache] Đã xóa {count} mục.")
+
+    def _ns_evict_cache(self):
+        """Auto-evict expired cache entries (called by QTimer every 30 min)."""
+        removed = _ns_cache_evict_expired()
+        if removed:
+            self._ns_log(f"[cache] Tự động xóa {removed} mục hết hạn.")
 
     def _ns_on_fetch_error(self, msg: str):
         """Handle fetch failure: log the error and show a critical message box."""
