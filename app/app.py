@@ -261,6 +261,7 @@ class NSEpisode:
     merged_path: Optional[Path] = None
     status: str = "pending"
     error_msg: str = ""
+    merge_note: str = ""   # "ok" | "no_sub" | "dur:+Xs" | "error"
 
 
 @dataclass
@@ -269,6 +270,8 @@ class NSMovie:
     name: str
     episodes: list[NSEpisode] = field(default_factory=list)
     save_dir: Path = field(default_factory=lambda: Path("."))
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
 
     @property
     def selected_count(self) -> int:
@@ -520,9 +523,9 @@ def _ns_load_bundled_fonts(fonts_dir: Path) -> list[str]:
 def _ns_analyze_vtt(vtt_path: Path) -> dict:
     """Parse a VTT file and return analysis: total cues and short-cue candidates.
 
-    A "short cue" is a subtitle line with 1-6 words that may need to be
-    merged with adjacent cues because the original cut leaves very brief
-    fragments (common when the source is segmented).
+    A "short cue" is a cue block with more than 1 subtitle line where at
+    least one line has 1-5 words — indicates fragmented/split subtitle
+    segments that likely need merging.
 
     Returns:
         dict with keys: total (int), short (int), total_subs (int)
@@ -556,9 +559,8 @@ def _ns_analyze_vtt(vtt_path: Path) -> dict:
         ]
         for l in sub_lines:
             total_subs += 1
-            if 1 <= len(l.split()) <= 6:
-                short += 1
-                break
+        if len(sub_lines) > 1 and any(1 <= len(l.split()) <= 5 for l in sub_lines):
+            short += 1
 
     return {"total": total, "short": short, "total_subs": total_subs}
 
@@ -568,8 +570,8 @@ def _ns_analyze_vtt(vtt_path: Path) -> dict:
 # ============================================================================
 
 
-def _ns_get_video_duration(path: Path) -> Optional[str]:
-    """Get video duration using ffprobe. Returns HH:MM:SS string or None on failure."""
+def _ns_get_video_duration_secs(path: Path) -> Optional[float]:
+    """Get exact video duration in seconds (float) using ffprobe."""
     try:
         result = sp.run(
             ["ffprobe", "-v", "error", "-show_entries",
@@ -577,14 +579,21 @@ def _ns_get_video_duration(path: Path) -> Optional[str]:
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
-            secs = float(result.stdout.strip())
-            h = int(secs // 3600)
-            m = int((secs % 3600) // 60)
-            s = int(secs % 60)
-            return f"{h:02d}:{m:02d}:{s:02d}"
+            return float(result.stdout.strip())
     except Exception:
         pass
     return None
+
+
+def _ns_get_video_duration(path: Path) -> Optional[str]:
+    """Get video duration using ffprobe. Returns HH:MM:SS string or None on failure."""
+    secs = _ns_get_video_duration_secs(path)
+    if secs is None:
+        return None
+    h = int(secs // 3600)
+    m = int((secs % 3600) // 60)
+    s = int(secs % 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
 
 
 # ============================================================================
@@ -608,10 +617,10 @@ class NSDetailDialog(QtWidgets.QDialog):
         )
         layout.addWidget(header)
 
-        # Table: 5 columns
-        self.table = QtWidgets.QTableWidget(0, 5)
+        # Table: 6 columns
+        self.table = QtWidgets.QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(
-            ["Tập", "Video gốc", "VTT", "Video Merged", "Báo cáo"]
+            ["Tập", "Video gốc", "VTT", "Video Merged", "Action", "Báo cáo"]
         )
         self.table.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QtWidgets.QTableWidget.SelectRows)
@@ -620,7 +629,8 @@ class NSDetailDialog(QtWidgets.QDialog):
         self.table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QtWidgets.QHeaderView.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setWordWrap(True)
         layout.addWidget(self.table)
@@ -683,9 +693,136 @@ class NSDetailDialog(QtWidgets.QDialog):
             merged_item.setForeground(QtGui.QBrush(QtGui.QColor("#16a34a")))
         self.table.setItem(row, 3, merged_item)
 
-        # Col 4: Báo cáo
+        # Col 4: Action (copy / xóa / kiểm tra — visible only when merged exists)
+        has_merged = bool(ep.merged_path and ep.merged_path.exists())
+
+        copy_btn = QtWidgets.QPushButton("Copy path")
+        copy_btn.setToolTip("Copy đường dẫn file merged")
+        copy_btn.setStyleSheet(
+            "QPushButton { background-color: #3b82f6; color: white; padding: 2px 6px; "
+            "border-radius: 3px; font-size: 11px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #2563eb; }"
+        )
+        copy_btn.setVisible(has_merged)
+        copy_btn.clicked.connect(lambda _, e=ep: self._copy_merged_path(e))
+
+        del_btn = QtWidgets.QPushButton("Xóa")
+        del_btn.setToolTip("Xóa file merged")
+        del_btn.setStyleSheet(
+            "QPushButton { background-color: #ef4444; color: white; padding: 2px 6px; "
+            "border-radius: 3px; font-size: 11px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #dc2626; }"
+        )
+        del_btn.setVisible(has_merged)
+        del_btn.clicked.connect(lambda _, e=ep, r=row: self._delete_merged_file(e, r))
+
+        check_btn = QtWidgets.QPushButton("Kiểm tra")
+        check_btn.setToolTip("So sánh thời lượng video merged với video gốc")
+        check_btn.setStyleSheet(
+            "QPushButton { background-color: #f59e0b; color: white; padding: 2px 6px; "
+            "border-radius: 3px; font-size: 11px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #d97706; }"
+        )
+        check_btn.setVisible(has_merged)
+        check_btn.clicked.connect(lambda _, e=ep: self._check_merged_vs_original(e))
+
+        cell_widget = QtWidgets.QWidget()
+        cell_layout = QtWidgets.QHBoxLayout(cell_widget)
+        cell_layout.setContentsMargins(2, 2, 2, 2)
+        cell_layout.setSpacing(3)
+        cell_layout.addWidget(copy_btn)
+        cell_layout.addWidget(del_btn)
+        cell_layout.addWidget(check_btn)
+        self.table.setCellWidget(row, 4, cell_widget)
+
+        # Col 5: Báo cáo
         report = self._build_report(ep)
-        self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(report))
+        self.table.setItem(row, 5, QtWidgets.QTableWidgetItem(report))
+
+    def _delete_merged_file(self, ep: NSEpisode, row: int):
+        """Xóa file merged và cập nhật lại hàng."""
+        reply = QtWidgets.QMessageBox.question(
+            self, "Xác nhận xóa",
+            f"Xóa file merged:\n{ep.merged_path.name}?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+        try:
+            ep.merged_path.unlink()
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, "Lỗi", f"Không thể xóa file:\n{e}")
+            return
+        ep.merged_path = None
+        self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(""))
+        cell_w = self.table.cellWidget(row, 4)
+        if cell_w:
+            for btn in cell_w.findChildren(QtWidgets.QPushButton):
+                btn.setVisible(False)
+        report = self._build_report(ep)
+        self.table.setItem(row, 5, QtWidgets.QTableWidgetItem(report))
+
+    def _copy_merged_path(self, ep: NSEpisode):
+        """Copy duong dan file merged vao clipboard."""
+        if ep.merged_path and ep.merged_path.exists():
+            QtWidgets.QApplication.clipboard().setText(str(ep.merged_path))
+            QtWidgets.QToolTip.showText(
+                QtGui.QCursor.pos(),
+                f"Copied: {ep.merged_path.name}",
+                None, QtCore.QRect(), 1500,
+            )
+
+    def _check_merged_vs_original(self, ep: NSEpisode):
+        """So sanh thoi luong video merged voi video goc."""
+        orig_dur = None
+        merged_dur = None
+        orig_secs = None
+        merged_secs = None
+
+        if ep.video_path and ep.video_path.exists():
+            orig_dur = _ns_get_video_duration(ep.video_path)
+        if ep.merged_path and ep.merged_path.exists():
+            merged_dur = _ns_get_video_duration(ep.merged_path)
+
+        def to_secs(t):
+            try:
+                return sum(int(x) * 60 ** i for i, x in enumerate(reversed(t.split(":"))))
+            except Exception:
+                return None
+
+        if orig_dur:
+            orig_secs = to_secs(orig_dur)
+        if merged_dur:
+            merged_secs = to_secs(merged_dur)
+
+        lines = []
+        lines.append(f"Video goc : {orig_dur or '—'}")
+        lines.append(f"Video merged: {merged_dur or '—'}")
+
+        if orig_secs is not None and merged_secs is not None:
+            diff = merged_secs - orig_secs
+            sign = "+" if diff >= 0 else ""
+            lines.append(f"Chenh lech : {sign}{diff}s")
+            if abs(diff) <= 2:
+                lines.append("✅ OK — thoi luong khop (<=2s)")
+                icon = QtWidgets.QMessageBox.Information
+            else:
+                lines.append(f"⚠ Chenh lech {abs(diff)}s — kiem tra lai!")
+                icon = QtWidgets.QMessageBox.Warning
+        elif not orig_dur:
+            lines.append("⚠ Khong doc duoc video goc")
+            icon = QtWidgets.QMessageBox.Warning
+        elif not merged_dur:
+            lines.append("⚠ Khong doc duoc video merged")
+            icon = QtWidgets.QMessageBox.Warning
+        else:
+            icon = QtWidgets.QMessageBox.Question
+
+        msg = QtWidgets.QMessageBox(self)
+        msg.setWindowTitle(f"Kiem tra - Tap {ep.episode}")
+        msg.setIcon(icon)
+        msg.setText("\n".join(lines))
+        msg.exec()
 
     def _build_report(self, ep: NSEpisode) -> str:
         """Build a report string comparing video durations and VTT subtitle analysis."""
@@ -870,9 +1007,8 @@ class NSVttEditorDialog(QtWidgets.QDialog):
                 if l.strip()
                 and not l.strip().startswith(("WEBVTT", "NOTE", "STYLE"))
             ]
-            # Flag cue if at least one sub line has 1-6 words
-            short_lines = [l for l in sub_lines if 1 <= len(l.split()) <= 6]
-            if short_lines:
+            # Flag cue: >1 sub line AND at least one line has 1-5 words
+            if len(sub_lines) > 1 and any(1 <= len(l.split()) <= 5 for l in sub_lines):
                 found.append(
                     f"⏱ {ts_full}\n   Sub: {' | '.join(sub_lines)}"
                 )
@@ -883,7 +1019,7 @@ class NSVttEditorDialog(QtWidgets.QDialog):
         dlg_layout = QtWidgets.QVBoxLayout(dlg)
 
         if found:
-            header = QtWidgets.QLabel(f"⚠ Tìm thấy {len(found)} mốc có thể cần tách:")
+            header = QtWidgets.QLabel(f"⚠ Tìm thấy {len(found)} mốc có sub ngắn (>1 hàng, có hàng 1-5 từ):")
             header.setStyleSheet("color: #ef4444; font-weight: bold; font-size: 13px;")
             dlg_layout.addWidget(header)
             text_edit = QtWidgets.QTextEdit()
@@ -1249,6 +1385,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
         if not ep.sub_path or not ep.sub_path.exists():
             shutil.copy2(ep.video_path, out_path)
             ep.merged_path = out_path
+            ep.merge_note = "no_sub"
             ep.status = "done"
             self.episode_status.emit(ep.episode, "done")
             self.log(f"tập {ep.episode} không có sub -- copy video vào merged/")
@@ -1291,6 +1428,9 @@ class NSDownloadMergeWorker(QtCore.QThread):
                 f"BorderStyle=1,Outline=1,Shadow=0,Bold=1,Alignment=2,MarginV={self.sub_margin_v}'"
             )
 
+        # Get exact source duration to pin output length
+        orig_secs = _ns_get_video_duration_secs(ep.video_path)
+
         cmd = [
             str(ffmpeg_path), "-y",
             "-i", str(ep.video_path),
@@ -1299,15 +1439,20 @@ class NSDownloadMergeWorker(QtCore.QThread):
             "-preset", self.ffpreset,
             "-crf", str(self.crf),
             "-c:a", "copy",
-            "-loglevel", "error",
-            str(out_path),
+            "-avoid_negative_ts", "make_zero",
         ]
+        if orig_secs is not None:
+            cmd += ["-t", f"{orig_secs:.6f}"]
+        cmd += ["-loglevel", "warning", str(out_path)]
 
         try:
             result = sp.run(cmd, capture_output=True, text=True, timeout=3600)
+            if result.stderr.strip():
+                self.log(f"ffmpeg warning tập {ep.episode}: {result.stderr[:300]}")
             if result.returncode != 0:
                 self.log(f"ffmpeg lỗi tập {ep.episode}: {result.stderr[:500]}")
                 ep.status = "error"
+                ep.merge_note = "error"
                 ep.error_msg = "ffmpeg failed"
                 self.episode_status.emit(ep.episode, "error")
                 return False
@@ -1316,17 +1461,38 @@ class NSDownloadMergeWorker(QtCore.QThread):
             ep.status = "done"
             self.episode_status.emit(ep.episode, "done")
             self.log(f"merge tập {ep.episode} OK -> {out_path.name}")
+            # Duration check
+            try:
+                orig_dur = _ns_get_video_duration(ep.video_path)
+                merged_dur = _ns_get_video_duration(out_path)
+                if orig_dur and merged_dur:
+                    def _to_secs(t):
+                        return sum(int(x) * 60**i for i, x in enumerate(reversed(t.split(":"))))
+                    diff = _to_secs(merged_dur) - _to_secs(orig_dur)
+                    sign = "+" if diff >= 0 else ""
+                    if abs(diff) <= 2:
+                        ep.merge_note = "ok"
+                        self.log(f"  duration OK: goc={orig_dur} merged={merged_dur}")
+                    else:
+                        ep.merge_note = f"dur:{sign}{diff}s"
+                        self.log(f"  CANH BAO duration: goc={orig_dur} merged={merged_dur} chenh={sign}{diff}s")
+                else:
+                    ep.merge_note = "ok"
+            except Exception:
+                ep.merge_note = "ok"
             return True
 
         except sp.TimeoutExpired:
             self.log(f"merge tập {ep.episode} TIMEOUT")
             ep.status = "error"
+            ep.merge_note = "error"
             ep.error_msg = "merge timeout"
             self.episode_status.emit(ep.episode, "error")
             return False
         except Exception as e:
             self.log(f"merge tập {ep.episode} exception: {e}")
             ep.status = "error"
+            ep.merge_note = "error"
             ep.error_msg = str(e)
             self.episode_status.emit(ep.episode, "error")
             return False
@@ -1340,6 +1506,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
             self.finished_all.emit()
             return
 
+        self.movie.start_time = time.time()
         self.log(f"=== Bắt đầu tải & merge '{self.movie.name}' ({total} tập) ===")
         self.log(f"Thư mục: {self.movie.save_dir / self.movie.folder_name}")
         done = 0
@@ -1372,6 +1539,7 @@ class NSDownloadMergeWorker(QtCore.QThread):
                         done += 1
                         self.progress.emit(done, total * 2)
 
+        self.movie.end_time = time.time()
         self.log(f"=== Hoàn tất '{self.movie.name}' ===")
         self.finished_all.emit()
 
@@ -1543,9 +1711,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.load_config()
         self.connect_ui()
 
-        # --- Build NetShort UI ---
+        # --- Build tabs: XemShort (first) + yt-dlp ---
+        tab_widget = QtWidgets.QTabWidget()
+        tab_widget.setDocumentMode(True)
+
+        # Tab 1: XemShort (NetShort)
         ns_widget = self._build_netshort_ui()
-        self.setCentralWidget(ns_widget)
+        tab_widget.addTab(ns_widget, "XemShort")
+
+        # Tab 2: yt-dlp (original UI, already built by setupUi)
+        yt_dlp_idx = tab_widget.addTab(self.centralwidget, "yt-dlp")
+        tab_widget.tabBar().setTabVisible(yt_dlp_idx, False)
+
+        # XemShort is the first tab (index 0) — default on startup
+        tab_widget.setCurrentIndex(0)
+
+        self.setCentralWidget(tab_widget)
 
         self._load_netshort_settings()
         self._check_netshort_ffmpeg()
@@ -1709,9 +1890,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ns_table_header.addWidget(self.ns_stop_btn)
         ns_table_layout.addLayout(ns_table_header)
 
-        self.ns_table = QtWidgets.QTableWidget(0, 5)
+        self.ns_table = QtWidgets.QTableWidget(0, 7)
         self.ns_table.setHorizontalHeaderLabels(
-            ["Tên phim", "Tập", "Chọn", "Trạng thái", "Actions"]
+            ["Tên phim", "Tập", "Chọn", "Trạng thái", "Kết quả", "Time", "Actions"]
         )
         self.ns_table.horizontalHeader().setSectionResizeMode(
             0, QtWidgets.QHeaderView.ResizeMode.Stretch
@@ -1726,9 +1907,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             3, QtWidgets.QHeaderView.ResizeMode.ResizeToContents
         )
         self.ns_table.horizontalHeader().setSectionResizeMode(
-            4, QtWidgets.QHeaderView.ResizeMode.ResizeToContents
+            4, QtWidgets.QHeaderView.ResizeMode.Stretch
+        )
+        self.ns_table.horizontalHeader().setSectionResizeMode(
+            5, QtWidgets.QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.ns_table.horizontalHeader().setSectionResizeMode(
+            6, QtWidgets.QHeaderView.ResizeMode.ResizeToContents
         )
         self.ns_table.verticalHeader().setVisible(False)
+        self.ns_table.setWordWrap(True)
         ns_table_layout.addWidget(self.ns_table)
 
         splitter.addWidget(ns_table_widget)
@@ -2394,6 +2582,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             str(movie.selected_count)))
         self.ns_table.setItem(row, 3, QtWidgets.QTableWidgetItem("Ready"))
         self._ns_set_status(row, "Ready")
+        self.ns_table.setItem(row, 4, QtWidgets.QTableWidgetItem("—"))
+        self.ns_table.setItem(row, 5, QtWidgets.QTableWidgetItem("—"))
 
         btn_widget = QtWidgets.QWidget()
         btn_layout = QtWidgets.QHBoxLayout(btn_widget)
@@ -2440,8 +2630,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         detail_btn.clicked.connect(lambda _, m=movie: self._ns_show_detail(m))
         btn_layout.addWidget(detail_btn)
 
+        delete_btn = QtWidgets.QPushButton("Xóa")
+        delete_btn.setStyleSheet(
+            "QPushButton { background-color: #ef4444; color: white; padding: 4px 8px; "
+            "border-radius: 4px; font-weight: bold; font-size: 12px; }"
+            "QPushButton:hover { background-color: #dc2626; }"
+            "QPushButton:disabled { background-color: #9ca3af; }"
+        )
+        delete_btn.setToolTip("Xóa phim khỏi danh sách")
+        delete_btn.clicked.connect(lambda _, m=movie: self._ns_remove_movie(m))
+        btn_layout.addWidget(delete_btn)
+
         movie.remerge_btn = remerge_btn
-        self.ns_table.setCellWidget(row, 4, btn_widget)
+        movie.delete_btn = delete_btn
+        self.ns_table.setCellWidget(row, 6, btn_widget)
         self._ns_update_row_btns(movie)
 
     def _ns_set_status(self, row: int, text: str):
@@ -2472,6 +2674,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         has_done = any(e.selected and e.status == "done" for e in movie.episodes)
         if hasattr(movie, "remerge_btn"):
             movie.remerge_btn.setVisible(not worker_running and has_done)
+        if hasattr(movie, "delete_btn"):
+            movie.delete_btn.setEnabled(not worker_running)
 
     def _ns_remove_movie(self, movie: NSMovie):
         """Remove a movie from the queue list and its corresponding table row."""
@@ -2480,6 +2684,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.nsmovies.remove(movie)
             if hasattr(movie, "remerge_btn"):
                 del movie.remerge_btn
+            if hasattr(movie, "delete_btn"):
+                del movie.delete_btn
             self.ns_table.removeRow(idx)
             if not self.nsmovies:
                 self.ns_start_btn.setEnabled(False)
@@ -2616,17 +2822,60 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         total_sel = movie.selected_count
         self._ns_set_status(row, f"{status} ({done_count}/{total_sel})")
 
+    def _ns_build_result_summary(self, movie: NSMovie) -> str:
+        """Build a merge-result summary string from episode merge_note fields."""
+        sel = [e for e in movie.episodes if e.selected]
+        ok_count      = sum(1 for e in sel if e.status == "done" and e.merge_note == "ok")
+        no_sub_count  = sum(1 for e in sel if e.status == "done" and e.merge_note == "no_sub")
+        dur_warn_count = sum(1 for e in sel if e.status == "done" and e.merge_note.startswith("dur:"))
+        error_count   = sum(1 for e in sel if e.status == "error" or e.merge_note == "error")
+        parts = []
+        if ok_count:
+            parts.append(f"✅ {ok_count} OK")
+        if no_sub_count:
+            parts.append(f"⚠ {no_sub_count} thiếu sub")
+        if dur_warn_count:
+            # Collect the actual diff strings for display
+            diffs = [e.merge_note for e in sel if e.merge_note.startswith("dur:")]
+            parts.append(f"⏱ {dur_warn_count} lệch thời gian ({', '.join(diffs)})")
+        if error_count:
+            parts.append(f"❌ {error_count} lỗi")
+        return "\n".join(parts) if parts else "—"
+
+    def _ns_format_time_info(self, movie: NSMovie) -> str:
+        """Format start time and total elapsed time for the movie."""
+        if not movie.start_time:
+            return "—"
+        start_str = time.strftime("%H:%M:%S", time.localtime(movie.start_time))
+        if movie.end_time:
+            elapsed = int(movie.end_time - movie.start_time)
+            mins, secs = divmod(elapsed, 60)
+            hrs, mins = divmod(mins, 60)
+            if hrs:
+                total_str = f"{hrs}h {mins}m {secs}s"
+            elif mins:
+                total_str = f"{mins}m {secs}s"
+            else:
+                total_str = f"{secs}s"
+            return f"Bắt đầu: {start_str}\nTổng: {total_str}"
+        return f"Bắt đầu: {start_str}"
+
     def _ns_on_movie_done(self, movie: NSMovie):
         """Mark movie row as Done and advance the iterator to the next movie."""
         if movie not in self.nsmovies:
             return
         row = self.nsmovies.index(movie)
-        ok = sum(
-            1 for e in movie.episodes
-            if e.selected and e.status == "done"
-        )
+        ok = sum(1 for e in movie.episodes if e.selected and e.status == "done")
         total = movie.selected_count
         self._ns_set_status(row, f"Done {ok}/{total}")
+
+        # Update Kết quả (col 4) and Time (col 5)
+        result_item = QtWidgets.QTableWidgetItem(self._ns_build_result_summary(movie))
+        self.ns_table.setItem(row, 4, result_item)
+        time_item = QtWidgets.QTableWidgetItem(self._ns_format_time_info(movie))
+        self.ns_table.setItem(row, 5, time_item)
+        self.ns_table.resizeRowsToContents()
+
         self._ns_update_row_btns(movie)
 
         if self._ns_iterator is None:
