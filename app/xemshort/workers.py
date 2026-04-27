@@ -5,16 +5,18 @@ import json
 import shutil
 import sys
 import time
+import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
-import threading
 
 import requests
 from PySide6 import QtCore
 
 from .models import XSEpisode, XSMovie
 from .helpers import (
+    _ns_b64_decode_safe,
     _ns_color_to_ass,
     _ns_detect_sub_ext,
     _ns_escape_path,
@@ -22,6 +24,7 @@ from .helpers import (
     _ns_get_video_duration_secs,
     _ns_install_fonts,
     _ns_parse_episodes,
+    _ns_try_decrypt,
 )
 from .cache import _ns_cache_get, _ns_cache_key, _ns_cache_set
 
@@ -38,7 +41,7 @@ NETSHORT_API_HEADERS = {
     "Sec-Fetch-Dest": "empty",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "same-site",
-    "short-source": "web",
+    "short-source": "netshort",
 }
 
 _MERGE_SIDECAR_FILE = ".merge_settings.json"
@@ -77,15 +80,16 @@ NETSHORT_DOWNLOAD_HEADERS = {
 class XSFetchWorker(QtCore.QThread):
     """Background thread that fetches episode list from the API."""
 
-    success   = QtCore.Signal(list, str)   # episodes, movie_name
-    cache_hit = QtCore.Signal(list, str)   # episodes, movie_name (served from cache)
-    error     = QtCore.Signal(str)
+    success   = QtCore.Signal(list, str, str, int)   # episodes, movie_name, movie_id, instance_id
+    cache_hit = QtCore.Signal(list, str, str, int)   # episodes, movie_name, movie_id, instance_id
+    error     = QtCore.Signal(str, int)              # msg, instance_id
 
     def __init__(self, api_url: str, movie_id: str):
         """Store API URL and movie ID for the fetch request."""
         super().__init__()
         self.api_url = api_url
         self.movie_id = movie_id
+        self.instance_id: int = uuid.uuid4().int & 0x7FFFFFFF
 
     def run(self):
         """Fetch episodes, checking in-memory cache first (TTL=30 min)."""
@@ -93,7 +97,7 @@ class XSFetchWorker(QtCore.QThread):
         cached = _ns_cache_get(key)
         if cached is not None:
             episodes, movie_name = cached
-            self.cache_hit.emit(episodes, movie_name)
+            self.cache_hit.emit(episodes, movie_name, self.movie_id, self.instance_id)
             return
 
         url = self.api_url.replace("{movie_id}", self.movie_id)
@@ -106,7 +110,7 @@ class XSFetchWorker(QtCore.QThread):
                  "-H", "Accept: */*",
                  "-H", f"Origin: {NETSHORT_API_HEADERS['Origin']}",
                  "-H", f"Referer: {NETSHORT_API_HEADERS['Referer']}",
-                 "-H", "short-source: web",
+                 "-H", f"short-source: {NETSHORT_API_HEADERS['short-source']}",
                  url],
                 capture_output=True, text=True, timeout=20, **_cflags
             )
@@ -118,17 +122,41 @@ class XSFetchWorker(QtCore.QThread):
             else:
                 data = _json.loads(result.stdout)
 
+            # Xử lý encrypted data field (data["data"] là chuỗi base64/AES)
+            if isinstance(data, dict) and isinstance(data.get("data"), str) and len(data.get("data", "")) > 100:
+                raw = _ns_b64_decode_safe(data["data"])
+                decrypted = _ns_try_decrypt(raw)
+                if decrypted is not None:
+                    data = decrypted
+
             movie_name = data.get("shortPlayName", "") if isinstance(data, dict) else ""
             episodes = _ns_parse_episodes(data, movie_name)
+            # Format mới: tên phim nằm trong từng episode item thay vì root shortPlayName
+            if not movie_name and episodes:
+                movie_name = episodes[0].name
             if not episodes:
-                self.error.emit("Không tìm thấy tập nào trong API response.")
+                if isinstance(data, dict):
+                    keys = list(data.keys())
+                    preview = str(data)[:400]
+                    self.error.emit(
+                        f"Không tìm thấy tập nào trong API response.\n"
+                        f"Keys: {keys}\n"
+                        f"Preview: {preview}",
+                        self.instance_id,
+                    )
+                else:
+                    self.error.emit(
+                        f"Không tìm thấy tập nào trong API response.\n"
+                        f"Type: {type(data).__name__}, Preview: {str(data)[:400]}",
+                        self.instance_id,
+                    )
                 return
 
             _ns_cache_set(key, episodes, movie_name)
-            self.success.emit(episodes, movie_name)
+            self.success.emit(episodes, movie_name, self.movie_id, self.instance_id)
 
         except Exception as e:
-            self.error.emit(str(e))
+            self.error.emit(str(e), self.instance_id)
 
 
 # Backward-compat alias
@@ -139,9 +167,9 @@ class XSDownloadMergeWorker(QtCore.QThread):
     """Background thread: downloads video + subtitle then optionally hardcodes sub via ffmpeg."""
 
     log_msg        = QtCore.Signal(str)
-    episode_status = QtCore.Signal(int, str)
-    progress       = QtCore.Signal(int, int)
-    finished_all   = QtCore.Signal()
+    episode_status = QtCore.Signal(int, str, int)   # ep_num, status, instance_id
+    progress       = QtCore.Signal(int, int, int)    # done, total, instance_id
+    finished_all   = QtCore.Signal(int)              # instance_id
 
     def __init__(self, movie: XSMovie, concurrency: int, download_sub: bool,
                  do_merge: bool, crf: int, preset: str,
@@ -163,6 +191,9 @@ class XSDownloadMergeWorker(QtCore.QThread):
         self.sub_bold = sub_bold
         self.sub_italic = sub_italic
         self._stop = threading.Event()
+        # Unique ID so stale signals from a previous worker are ignored
+        import uuid
+        self.instance_id = uuid.uuid4().int & 0x7FFFFFFF
 
     def stop(self):
         """Signal the worker to stop after the current episode finishes."""
@@ -249,22 +280,23 @@ class XSDownloadMergeWorker(QtCore.QThread):
         video_path = folder / f"{base}.mp4"
 
         # ── Video ────────────────────────────────────────────────────────────
-        if video_path.exists() and video_path.stat().st_size > 1024 and ep.status != "error":
+        if video_path.exists() and video_path.stat().st_size > 1024 and ep.status == "done":
+            # Video exists AND was previously merged — skip download, merge will handle it
             ep.video_path = video_path
             ep.status = "downloaded"
-            self.episode_status.emit(ep.episode, "downloaded")
+            self.episode_status.emit(ep.episode, "downloaded", self.instance_id)
             self.log(f"SKIP video tập {ep.episode} (đã tồn tại)")
         else:
-            self.episode_status.emit(ep.episode, "downloading")
+            self.episode_status.emit(ep.episode, "downloading", self.instance_id)
             dl_ok = self._download_file(ep.play, video_path, f"video tập {ep.episode}")
             if not dl_ok:
                 ep.status = "error"
                 ep.error_msg = "download video failed"
-                self.episode_status.emit(ep.episode, "error")
+                self.episode_status.emit(ep.episode, "error", self.instance_id)
                 return False
             ep.video_path = video_path
             ep.status = "downloaded"
-            self.episode_status.emit(ep.episode, "downloaded")
+            self.episode_status.emit(ep.episode, "downloaded", self.instance_id)
 
         # ── Subtitle ────────────────────────────────────────────────────────
         if self.download_sub and ep.subtitle_url:
@@ -314,7 +346,8 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 if sub_mtime <= out_path.stat().st_mtime:
                     ep.merged_path = out_path
                     ep.status = "done"
-                    self.episode_status.emit(ep.episode, "done")
+                    ep.merge_note = "skip:existing"
+                    self.episode_status.emit(ep.episode, "done", self.instance_id)
                     self.log(f"merge tập {ep.episode} SKIP (đã tồn tại)")
                     return True
                 self.log(f"tập {ep.episode}: sub mới hơn merged -- re-merge...")
@@ -324,11 +357,11 @@ class XSDownloadMergeWorker(QtCore.QThread):
             ep.merged_path = out_path
             ep.merge_note = "no_sub"
             ep.status = "done"
-            self.episode_status.emit(ep.episode, "done")
+            self.episode_status.emit(ep.episode, "done", self.instance_id)
             self.log(f"tập {ep.episode} không có sub -- copy video vào merged/")
             return True
 
-        self.episode_status.emit(ep.episode, "merging")
+        self.episode_status.emit(ep.episode, "merging", self.instance_id)
         self.log(f"merge tập {ep.episode}...")
 
         ffmpeg_path = self._get_ffmpeg_path()
@@ -337,7 +370,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
             ep.status = "error"
             ep.error_msg = "ffmpeg not found"
             ep.merge_note = "error"
-            self.episode_status.emit(ep.episode, "error")
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
             return False
 
         sub_filter = _ns_escape_path(ep.sub_path)
@@ -408,16 +441,14 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 ep.status = "error"
                 ep.merge_note = "error"
                 ep.error_msg = "ffmpeg failed"
-                self.episode_status.emit(ep.episode, "error")
+                self.episode_status.emit(ep.episode, "error", self.instance_id)
                 return False
 
             ep.merged_path = out_path
             ep.status = "done"
-            self.episode_status.emit(ep.episode, "done")
-            self.log(f"merge tập {ep.episode} OK -> {out_path.name}")
             _save_merge_sidecar(merge_dir, self._settings_fingerprint())
 
-            # Duration check
+            # Duration check — set merge_note BEFORE emitting done
             try:
                 orig_dur = _ns_get_video_duration(ep.video_path)
                 merged_dur = _ns_get_video_duration(out_path)
@@ -439,6 +470,9 @@ class XSDownloadMergeWorker(QtCore.QThread):
                     ep.merge_note = "ok"
             except Exception:
                 ep.merge_note = "ok"
+
+            self.episode_status.emit(ep.episode, "done", self.instance_id)
+            self.log(f"merge tập {ep.episode} OK -> {out_path.name}")
             return True
 
         except sp.TimeoutExpired:
@@ -446,14 +480,14 @@ class XSDownloadMergeWorker(QtCore.QThread):
             ep.status = "error"
             ep.merge_note = "error"
             ep.error_msg = "merge timeout"
-            self.episode_status.emit(ep.episode, "error")
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
             return False
         except Exception as e:
             self.log(f"merge tập {ep.episode} exception: {e}")
             ep.status = "error"
             ep.merge_note = "error"
             ep.error_msg = str(e)
-            self.episode_status.emit(ep.episode, "error")
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
             return False
 
     def run(self):
@@ -462,7 +496,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
         total = len(selected)
         if total == 0:
             self.log("Không có tập nào được chọn.")
-            self.finished_all.emit()
+            self.finished_all.emit(self.instance_id)
             return
 
         self.movie.start_time = time.time()
@@ -488,14 +522,15 @@ class XSDownloadMergeWorker(QtCore.QThread):
                     dl_ok += 1
                 else:
                     dl_fail += 1
-                self.progress.emit(done, total * (2 if self.do_merge else 1))
+                self.progress.emit(done, total * (2 if self.do_merge else 1), self.instance_id)
 
         if self._stop.is_set():
             self.log("Đã dừng.")
-            self.finished_all.emit()
+            self.finished_all.emit(self.instance_id)
             return
 
         merge_ok = 0
+        merge_skip = 0
         merge_fail = 0
 
         if self.do_merge:
@@ -509,26 +544,37 @@ class XSDownloadMergeWorker(QtCore.QThread):
                         ok = self._merge_episode(ep)
                         if ok:
                             done += 1
-                            merge_ok += 1
+                            if ep.merge_note.startswith("skip:"):
+                                merge_skip += 1
+                            else:
+                                merge_ok += 1
                         else:
                             merge_fail += 1
-                        self.progress.emit(done, total * 2)
+                        self.progress.emit(done, total * 2, self.instance_id)
 
-        # Summary log
-        dl_summary = f"Tải: {dl_ok}/{total} thành công" + (f", {dl_fail} lỗi" if dl_fail else "")
+        # Summary log — actual new downloads vs already-present skips
+        actual_dl = dl_ok - merge_skip  # episodes actually downloaded (not already-done skips)
+        dl_summary = f"Tải: {actual_dl} mới" + (f", {dl_fail} lỗi" if dl_fail else "")
         if self.do_merge:
-            merge_summary = f"Merge: {merge_ok}/{dl_ok} thành công" + (f", {merge_fail} lỗi" if merge_fail else "")
+            merge_parts = []
+            if merge_ok:
+                merge_parts.append(f"{merge_ok} mới")
+            if merge_skip:
+                merge_parts.append(f"{merge_skip} đã có")
+            if merge_fail:
+                merge_parts.append(f"{merge_fail} lỗi")
+            merge_summary = "Merge: " + ", ".join(merge_parts) if merge_parts else "Merge: 0"
             self.log(f"[Kết quả] {dl_summary} | {merge_summary}")
         else:
             self.log(f"[Kết quả] {dl_summary}")
 
         # Always finish at 100%
         grand_total = total * (2 if self.do_merge else 1)
-        self.progress.emit(grand_total, grand_total)
+        self.progress.emit(grand_total, grand_total, self.instance_id)
 
         self.movie.end_time = time.time()
         self.log(f"=== Hoàn tất '{self.movie.name}' ===")
-        self.finished_all.emit()
+        self.finished_all.emit(self.instance_id)
 
 
 # Backward-compat alias

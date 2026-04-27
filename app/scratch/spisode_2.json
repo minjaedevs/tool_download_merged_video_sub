@@ -1,0 +1,726 @@
+{
+  "success": true,
+  "message": "thành công",
+  "data": [
+    {
+      "id": "2041732413888921612",
+      "name": "Liên Minh Phế Vật",
+      "episode": 1,
+      "play": "https://alicdn.netshort.com/oQEYEw7faK9I1wqNOp4peQFP1lwD13qAfBp5hC?a=0&auth_key=1777944380-e287ddd0fbb546c5bb78d1db65027119-0-620fb6874fd689f14b00c3013478b1bd&br=1181&bt=1181&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=d571bdc4de844295890ac9dce3f5e34c&er=0&l=2026042418302920E453E22E9D8235728F&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=anduZ245cm10OjozMzZoNEApN2hpaGdmMzs8NztnZmU6Z2duMGJzMmRrNGRhMi1kXjVzc2AwMjBgNl42Mi8xYjFhLjI6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/1f572953055c4ee1a1124af28ca7a569?auth_key=1777919870-2e554a60b3954b75a5e53e99cf37841c-0-f8a13a05b7f46af5864e6b28adb71919&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732578653765640",
+      "name": "Liên Minh Phế Vật",
+      "episode": 2,
+      "play": "https://alicdn.netshort.com/oMMBI2Fpm1wQ59yhAQDfEP4pNepqpCTqcaE1f6?a=0&auth_key=1778124111-dfc0d68a1c354af08b602ff6cc1b0ddb-0-64530a72a4290644e4a64f7bae3ed625&br=1191&bt=1191&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=f1b14fbfde964b1ba68dee60daea8d93&er=0&l=20260425023035361A053A525F1636D272&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M3duZ245cm50OjozMzZoNEApPDtoZzloO2Q0NzxnZTdlaWdvMGJzMmQ0NGRhMi1kXjVzczBhXl4tYmEzX18zYmNjLi46Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/d621f114bd7644538cf9fb6215ec2321?auth_key=1777919870-4c4fd3bf799f484e887dbf46935dfd36-0-5eb032cb2e2a0b7db9ead364b4113c70&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732595758137359",
+      "name": "Liên Minh Phế Vật",
+      "episode": 3,
+      "play": "https://alicdn.netshort.com/oMX4wQKID3PPaCSEqEfPfygQ9FN3kpAq63ENfD?a=0&auth_key=1777944368-9078cd3ccedc408eb2841dfdac478f0a-0-32eef265da9c3318c4cf010e74011a2a&br=984&bt=984&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=f1a9ce11609e49b4a742cda85a3fea99&er=0&l=20260425023038A32D5D78945BD95155B8&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=MzVpaHU5cmx0OjozMzZoNEApPGg2OGRmN2RlNzw5NGZkaWcucXNnMmRrNGRhMi1kXjVzczZeY141YS80MTZiLS5iNi46Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/99161e88ba5946ac9c9430e79f554a10?auth_key=1777919868-1cc9942c257c4d25a0879d3c70e4e2c3-0-635612b2dab65c695fb89f62e2d0776f&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414589370380",
+      "name": "Liên Minh Phế Vật",
+      "episode": 4,
+      "play": "https://alicdn.netshort.com/oYonLDinIdNLIHSefrBQheOo2e2pGCgnoeoIVA?a=0&auth_key=1778184773-5ef184e139404ed583c0aec18f42757f-0-3f99158f01248c22838a60ee95c7e11e&br=1128&bt=1128&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=84746b373eb949349ede694980a6ed75&er=0&l=20260425023030ABC013382FBABD379523&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajg8dXM5cm10OjozMzZoNEApOmhkOzc5Zzw2N2U2Njk6O2djMWFtMmRrNGRhMi1kXjVzczJhMy02NmJiMTY2YjRfMTE6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/72dd220d451f412bac0bce12a00a0e5b?auth_key=1777919871-6799f4bf54bb4a74aee1489f01f4f94c-0-76d6e0b5d218517aaa211cca13d360f6&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732578632794117",
+      "name": "Liên Minh Phế Vật",
+      "episode": 5,
+      "play": "https://alicdn.netshort.com/okiHkQd06vGBAkcQiylunGxAs6VfEUmo1KWKIB?a=0&auth_key=1778533840-addf657ce1e14a40b165b284a9328d66-0-951b2f2638831118a149cca3c1745e0d&br=694&bt=694&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=81c3a09e46c24a23b83e370b3b9e93f6&er=0&l=202604270228244C1CD6FF211B823EE352&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=MzdyPGw5cmh2OjozMzZoNEApaTw8NjM2NmU1N2Y3PGRmO2dfMGAyMmRjNF5hMi1kXjVzczMwYl9fNGI1MF4vM2ItMC46Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/03cbc5b397004d31b0290a6123712689?auth_key=1777923419-6b39f43488bb43f4a49f59b056bf0a29-0-f922df1f2625b3299d81f44adaf866fc&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732580851580933",
+      "name": "Liên Minh Phế Vật",
+      "episode": 6,
+      "play": "https://alicdn.netshort.com/ogyKhfQNawQYxEEpL4FfACqpSpNOPfIrNlDuqP?a=0&auth_key=1778124069-14193d9aaa1c42b4abcbb54c34799cf4-0-55314a39253726d7ba7b913eb2fdd4f3&br=1992&bt=1992&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=5060c9b874694ec393188fa92684c786&er=0&l=202604250230362C666AED1BC87E33D845&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajw1eHE5cm10OjozMzZoNEApO2Y7NWQ7NDxmNzk6ZWY5OGdjZF9eMmRzNGRhMi1kXjVzczM0MTM2YzUwMGI2MTU2LS06Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/9a0bc4ddfa58432c807337c5f9883edb?auth_key=1777919869-9a9cbda6b9a649c4a66a07d374b432cc-0-6f5a25dd4358b643e6e9dbb26028fa32&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414564204552",
+      "name": "Liên Minh Phế Vật",
+      "episode": 7,
+      "play": "https://alicdn.netshort.com/oQO2gaFTBViRltboLIfKeCFfWDvGqLnl3gtfoU?a=0&auth_key=1778061872-d6d3cedd69d145c4802561f67dbdd9e1-0-a46de0216f0e7d77af04e2955bab3490&br=1596&bt=1596&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=6c530a3b597945399b78e94fed4cf217&er=0&l=20260423143433758FCB22182C6031F65B&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2s7dXM5cjt1OjozMzZoNEApNGk3aDdoOjw2Nzo4NjM4OWdhamFtMmRjbV5hMi1kXjVzczQvYGFjNjVfNjI2Nl9eMGA6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/3b133128e56148b1b48935d074bdff3b?auth_key=1777923416-1daa84a7177940e99c7732216bd984a2-0-04adbc161756861b9b438a0b0a84070e&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414706810895",
+      "name": "Liên Minh Phế Vật",
+      "episode": 8,
+      "play": "https://alicdn.netshort.com/osWAYH05QpGJilV1iNvnnIEBhKWs8moAdJfVG3?a=0&auth_key=1777944318-db59b76ce512434fbd27151687c85f2d-0-178d1bfe529eebfb3cc23bbdb6115fd9&br=1746&bt=1746&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=96f25f29705b48dc861b785e91462ceb&er=0&l=20260425023032ABC013382FBABD37952F&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajw1eHE5cmx0OjozMzZoNEApaDU3PDg6NDtnNzg6NThpPGdiZF9eMmRzNGRhMi1kXjVzc19gMy5iNV8zYDVfLTZjLzM6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/eea4772e632d41e1b4572fe468e9198a?auth_key=1777919868-ce6bdfbb21fc454a832a68d78a49476c-0-81433072a44a223ea6d439dcbff77a96&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732413930864652",
+      "name": "Liên Minh Phế Vật",
+      "episode": 9,
+      "play": "https://alicdn.netshort.com/oEfa8fMqJeNBuWbwTURTjEgUVAjWFsWiufR3QM?a=0&auth_key=1778174573-3ba8ed6c42604a1c9b7fd4a1be930b25-0-906a3b019c80a5e90f7823fad08ca64c&br=2048&bt=2048&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=32ff9102335045c49152168edc1a1f94&er=0&l=202604260229228E9A24808399833A7E7F&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajVyPGw5cnR1OjozMzZoNEApPDQ0Zzs0ODxmNzg2MzxpNmcxMGAyMmRjbF5hMi1kXjVzczFjXmBiMy8uMTItMC8uYy86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/bb574f01ae374bc3a4f9dd8c9652b412?auth_key=1777923417-64ce29f190ff43a493a51bbf2e5d86fb-0-14a01508d5e5c3b689c8a8f5759858fc&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414853611535",
+      "name": "Liên Minh Phế Vật",
+      "episode": 10,
+      "play": "https://alicdn.netshort.com/o8b3EWwNIqMbebD7AUqFR1ijIfv0phEC1QypVf?a=0&auth_key=1778219597-0595195f5c52465aa2be318e52ef9b52-0-a9028c49dc725591893905b15784a150&br=987&bt=987&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=b03ce8717089460cbbac8a9f5bc44311&er=0&l=20260423143431BE6AEC54869E212EFC90&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2ttZ245cjt1OjozMzZoNEApNDdmODw7ZGUzNzs6Omg2ZWdfamJzMmRjbV5hMi1kXjVzcy4wMV9jXmBfYDM2LS41YC06Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/0ae55ca518604dc2a2cb52ae12f99577?auth_key=1777923417-04487e3236cc4ff29f19a06afe62151f-0-a8386002328bc58e402aec29ffddc38d&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732578695708681",
+      "name": "Liên Minh Phế Vật",
+      "episode": 11,
+      "play": "https://alicdn.netshort.com/ogvNA1G0silQRGpEHchfAip8rBaKVNI3JEoY5K?a=0&auth_key=1778184726-b83915c54f3f4ab695241e3c0ba860d5-0-9a40c8a5bf387ad7a4d4840c32f48971&br=1425&bt=1425&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=a6a914612f53497a90e18f73cc4f9fe4&er=0&l=20260425023028261DAB7B73A5BC348849&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=Mzw1eHE5cmx0OjozMzZoNEApaDw3Zjo7aDw6Nzg1OTRkZGdiZF9eMmRzNGRhMi1kXjVzczFjY2AwYy4tXjYwYy4xNjM6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/0d417a48bb4b4fe78c7d94d5c48f085f?auth_key=1777919870-063030c7bb684d47837b9c8f3bb085b2-0-ee2902ad521bc022b280911f286fa7d2&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732578712485899",
+      "name": "Liên Minh Phế Vật",
+      "episode": 12,
+      "play": "https://alicdn.netshort.com/oU1hPp1eEEjafFhvBQwICqAp3MX4C0DpqEHfN9?a=0&auth_key=1778184749-b4d7766f5f0f43a8903989cc13dcfbb2-0-4056f85ec5cf7ae637c597b016cfd72a&br=1638&bt=1638&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=9b0c3177453b46f0bd935baf3541cad0&er=0&l=20260425023034ABC013382FBABD379538&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M3duZ245cm10OjozMzZoNEApZ2Y3NmQ4PGVpNzY3OjYzPGduMGJzMmQ0NGRhMi1kXjVzcy1eLjJjXzBhLTNfMjQuYF86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/5eed22a6abbb401199c525de17fd1f27?auth_key=1777919868-7c439b5e64e8497b860fab34fbac606e-0-871275097a35bb7287c34375d7f1133b&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414551621638",
+      "name": "Liên Minh Phế Vật",
+      "episode": 13,
+      "play": "https://alicdn.netshort.com/ocCbfp94cF7OeqaQIpEDpEfwEMldqP11AwhBBN?a=0&auth_key=1778184730-f0d0bd46231f4ce7801862cde9418d9b-0-2d493591cc6e9ddc3217d782dc851dcc&br=1193&bt=1193&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=3d415a5eeae24100ad24e2a800396775&er=0&l=202604250230337B7A75DEB1587F5011D4&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M3duZ245cmp0OjozMzZoNEApOjk2M2RoNWQzN2hoODg3NmdsMGJzMmRjNGRhMi1kXjVzczI0Ni01LzFhLS4vXmJeLmE6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/e793e3583a7748b1b09c6ccbba69163d?auth_key=1777919869-8ffdad9cfe3549e68ac582db0f6ef504-0-d1a37fd8913b9db4c3e2cdacfa47ac03&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732578653765647",
+      "name": "Liên Minh Phế Vật",
+      "episode": 14,
+      "play": "https://alicdn.netshort.com/ooz1DfudqEowIpm0rgpqFCyrQlNcftCsWAeYx0?a=0&auth_key=1777525611-b8136621b9b44e9da53b96c4140a7a61-0-e054cfa88d9433dbe822f8308650fe97&br=946&bt=946&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=8b069227b88a4bd481d7586162925702&er=0&l=202604151438057B360C3D9C49180962A0&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M3Q1eHE5cnF2OjozMzZoNEApMzg8OTk4ZztnNztlNTwzO2dfL19eMmRjbV5hMi1kXjVzcy80Ly8uNTQuMV9eNTQvM186Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/7560badd58974d2190396de96df881e9?auth_key=1777923421-7e2bbf0db32f4533a9126e9a06d9f4e0-0-6e9bf821626a764782e9dfea81152e25&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414820057099",
+      "name": "Liên Minh Phế Vật",
+      "episode": 15,
+      "play": "https://alicdn.netshort.com/oAxa8FXsHVMWvVQmiinPdEID77z7T36BzXjwA?a=0&auth_key=1778219523-38a3e20db57b480cb82e0c0257a7ea05-0-198c081e103d251f8c90b9f73e945f52&br=1708&bt=1708&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=460dfaac46814159b6517418ea71325a&er=0&l=20260423143429BE6AEC54869E212EFC89&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M21paHU5cmt2OjozMzZoNEApODY6aDQ6OGU4Nzs3ZGkzN2dsY3NnMmQ0bV5hMi1kXjVzc14vLl41MS4zNi4uM2BeYTM6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/ff07c3d9f6e448b391c5ab96934d5357?auth_key=1777923416-97ea21944fbf41179a974d3db82950e8-0-9de1d7dab80d54a36259e9bb601a3402&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732580956438541",
+      "name": "Liên Minh Phế Vật",
+      "episode": 16,
+      "play": "https://alicdn.netshort.com/oAIVEQAQGxY6vzB0ViXrfYb57H31MiVKshuWAR?a=0&auth_key=1777525598-cb39258b561548b99836ede1aeb15884-0-7cd3727d657897fc08acc0f636063fbf&br=1848&bt=1848&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=92f31f8941934b70822dc549e1dcad41&er=0&l=202604151438047B360C3D9C4918096295&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=anI1eHE5cjl2OjozMzZoNEApN2RnaDdmNTs6Nzw3OzRpPGdxL19eMmRjNF5hMi1kXjVzcy5hYC42MmEvLV8wLjZjMC86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/f9a8f9aa699a403e99576f8656cfe7e2?auth_key=1777923421-2272e639c0014ae7acbe95101bdffb97-0-6b99991ca5247fb352ca207affb6f270&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732578641182732",
+      "name": "Liên Minh Phế Vật",
+      "episode": 17,
+      "play": "https://alicdn.netshort.com/o4fhBUeTgI9BibGRcwreFLiqeGwjX4gdjLFilV?a=0&auth_key=1778533763-8f1414a25822438daa78d3a630c7b1d6-0-77cef0ed69495e2b0b9fbfb14af8e594&br=1678&bt=1678&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=fda6e72d7fe544bea57895b02250896b&er=0&l=2026042702282335140750B93F6941AB6A&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M3I1eHE5cjp2OjozMzZoNEApOTs4NWU8OmRlN2g6NWhkaWdyL19eMmRrNF5hMi1kXjVzc182LS8tMjUyYjEyY2E0M2E6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/26b8cee6354e424e8d0499713e6cfb7d?auth_key=1777923419-ccf82e2d793445a3b0f0b662cc8a9670-0-e4e08e7948df2c16cfc973e39e425d21&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414727782413",
+      "name": "Liên Minh Phế Vật",
+      "episode": 18,
+      "play": "https://alicdn.netshort.com/ogDbfEzgPIp4OFNqLw9fXUxERktACNqnhpQafA?a=0&auth_key=1777944310-b1a6bd35151d4e528bd1bf0ec66e090e-0-8a460edae0fc0d2aa719dac1aebba4d5&br=1806&bt=1806&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=08ba048a31b94f7692edcfe895f87b15&er=0&l=2026042418302520E453E22E9D82357274&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=Mzg8dXM5cm10OjozMzZoNEApNDppPGhmaDw6N2U2OzNlM2dkMWFtMmRrNGRhMi1kXjVzczJfNTI1Y2EvM2M2Ll4xXjU6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/a778616b9ef44fca93a7ed0fd3354735?auth_key=1777919868-4ddcfa7f3c3e460c873b3234bfc9eca2-0-5607b2ffb782b66a2e9ed983051f684a&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414585176075",
+      "name": "Liên Minh Phế Vật",
+      "episode": 19,
+      "play": "https://alicdn.netshort.com/ocKhG0WKenli1pJqAvELSyjPxmRKkiIBQIsAZG?a=0&auth_key=1777944404-d3fd06e67d6448ceb7c3455253ffaa61-0-348596ef3bd230a4055bf7d291b7c0b5&br=952&bt=952&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=2ff2ef4e23b14c15a13000994de53cb3&er=0&l=20260425023034486FEBB0F9105735C297&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=amxyPGw5cmt0OjozMzZoNEApZTZoNzwzNmQ0N2U1N2hpNWdgZGAyMmQ0NGRhMi1kXjVzczBgMmE2LS0uMmAuMGJjL2M6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/6ce3aa3ece2f47babf773e9b9c7122e2?auth_key=1777919869-b3c6c0e7fc7c47ee8396d36e3c603755-0-865ccdd73b6bac6c054bf410674c175a&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414627119109",
+      "name": "Liên Minh Phế Vật",
+      "episode": 20,
+      "play": "https://alicdn.netshort.com/oEuxvDPEaOQS4qSpfrgINSyFGf3fjNqwAD8CqQ?a=0&auth_key=1777944408-5261e7dff2e4436791139937ac434ea6-0-db2f29717c25bd8d96e265b6cd15e71b&br=913&bt=913&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=b4770b7d08e94911a762a25e46e71cb2&er=0&l=2026042502303766D114399DF7FE389E49&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=Mzw1eHE5cm10OjozMzZoNEApZTRoNzhkOWQ0N2gzOjM6ZWdjZF9eMmRrNGRhMi1kXjVzcy9gNDNiLy80LjY2NWFfNDE6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/1381d8a8aea04863ae6a80ba231de78f?auth_key=1777919869-e5ac35f920464d19a2e63279baceee0e-0-b78df4aa78c304f70c133f358a52e242&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414656479244",
+      "name": "Liên Minh Phế Vật",
+      "episode": 21,
+      "play": "https://alicdn.netshort.com/o4DVWwTKEC710IErcfNxqBpALO1TcqT1QefWFp?a=0&auth_key=1778061832-9a88f1c22eb54ef8aa524a71ba25c7c8-0-2d5dc92e38c0b8cbef196b585bd5a038&br=1327&bt=1327&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=77965a2262074939a2a730ac326b2f89&er=0&l=20260423143435F1CCF53A12A3DB2F9EDF&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=am1tZ245cjV2OjozMzZoNEApOzU5NmQ2ZGQ2NzM5NTg8Omc2amJzMmRrNF5hMi1kXjVzczZjXy9gLTQvNjY0Ly9eMzQ6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/fc9fbd5ce85841f99e3d575fdce7c14a?auth_key=1777923416-a51b8123e0254f18b5e93f70e6e6bb65-0-341b10e48e5af12d1d70c5fa651823dd&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414635507722",
+      "name": "Liên Minh Phế Vật",
+      "episode": 22,
+      "play": "https://alicdn.netshort.com/ogdqGenJUI3gIcxNOgTVLF2VQdb4fNtefBs7oH?a=0&auth_key=1778061811-44fa91bca67d48a981fd8ee1ea51b7b4-0-7ba9029f48b3d7f387a871e35a656058&br=2029&bt=2029&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=423bdc48dda949faaac833a4b892a707&er=0&l=202604231434326E90293C5C6B662AFEA4&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=am07dXM5cjx2OjozMzZoNEApM2Q8ZWQ2ZmRpN2RnN2c2N2djamFtMmQ0NF5hMi1kXjVzczQ0LzUxMDVeXjY2YTVgXy86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/e63c5c39b1c844f0b776953cd0c7c8b8?auth_key=1777923422-f88b3dbf04b3467f98435b396be7b392-0-ad1efa9cffe5a0f3a76c06cb3f56b7cc&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732578578268170",
+      "name": "Liên Minh Phế Vật",
+      "episode": 23,
+      "play": "https://alicdn.netshort.com/oMepUlO0XfYpQN02qIFW1xwDVf1T7WcEAqCHVE?a=0&auth_key=1778533730-c2d274c9f3d94ba282753d919b2b3674-0-1c48dc855ebbe716d0f9bc0d2e42cc85&br=2164&bt=2164&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=74f0521a95724712a41149a21eb1b9b0&er=0&l=202604270228220481C8531FADBE44D7DC&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M21tZ245cjh2OjozMzZoNEApZWVlNGQ3NGQ0Nzo8NDhpOmdfamJzMmRjNF5hMi1kXjVzcy02LmIvNi4xLzQvMl4vLTE6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/89b7b90760ef48f58e61a89d19f46e4c?auth_key=1777923418-c3a167f618a9476988bf10a071e7d124-0-c6974bdfae77de15df1c61d52b0b2a21&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414597758988",
+      "name": "Liên Minh Phế Vật",
+      "episode": 24,
+      "play": "https://alicdn.netshort.com/oEqNp1EGps9WSrwmqrOSijqQDfffFAgm2CNpcI?a=0&auth_key=1778131120-b2b2130bbaee4116918b09c5de39976d-0-4fac3a25d5f9e2d2f2c32b40df065746&br=2086&bt=2086&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=d2251c80e8484bd099d79655a654aa0b&er=0&l=202604260229142F52B3F96F50203D9386&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=am1tZ245cjd2OjozMzZoNEApM2Q4ZDg8ZzxnNzdoOzQ1Z2deamJzMmRrNF5hMi1kXjVzc19eMTMyMzQ2LV81NS1gMi86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/6c069ffee4a24b99af257218a94f1ed3?auth_key=1777923417-f22fd81e50d74d3b8512c98837122823-0-e5bc6226c64c3c74c600951e5d3af541&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414736171019",
+      "name": "Liên Minh Phế Vật",
+      "episode": 25,
+      "play": "https://alicdn.netshort.com/o4BlPiyQHEp8mim1Ssof3mSE2IRaAGKKh0INvA?a=0&auth_key=1777944316-b570e6f04f494c52833709fbaa530510-0-36c7833fa7a3da32acea43ce56c76c2a&br=1309&bt=1309&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=0f9c0859645243b38a58bd5908b47252&er=0&l=2026042418302820E453E22E9D82357286&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2xyPGw5cm10OjozMzZoNEApODplMzhlODtlNzg5ODM8M2dhZGAyMmRjNGRhMi1kXjVzcy8vMTU2YTVeMDAvMTY1YGM6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/0a37efe9a9f242549b16627d807378e3?auth_key=1777919870-a915e0fb3e2f4442a3a965febbb9bd81-0-c626045189536c94c2817971a563f7c2&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414459346952",
+      "name": "Liên Minh Phế Vật",
+      "episode": 26,
+      "play": "https://alicdn.netshort.com/oUfNQqP9mpKVPdrD7oCwIfqSqgFGApfa4DDwIE?a=0&auth_key=1778184705-82ae2928bc374422a4365c1796246c21-0-359fd00e8c755b634ffac160c03a6417&br=1486&bt=1486&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=cceec2823cf543eeba0dfb42bb465675&er=0&l=202604250230257B7A75DEB1587F501173&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=anduZ245cmx0OjozMzZoNEApOjg3ZTdpM2VoN2k2O2ZoZmdtMGJzMmRrNGRhMi1kXjVzczIzM18vX2FeYjAyYC8vYmA6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/ab334842db004d4f850f111cdd60e693?auth_key=1777919869-22aedea4d9ce485aaabe41109cb6aa12-0-107ed2e8f0cc3cc28057dcd435933288&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414434181124",
+      "name": "Liên Minh Phế Vật",
+      "episode": 27,
+      "play": "https://alicdn.netshort.com/oIiGVRA06vmLAT7Qi5tuTGxAs2VfEhq61zaKIB?a=0&auth_key=1778174539-45fcf780c50044fcb797e248b2d643b4-0-b710ecbbbb86a878c055592425fcc52a&br=1259&bt=1259&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=e4162062a70c4f85a2e44bd75df5464d&er=0&l=2026042602292394CE2D6841994B3B70E0&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M207dXM5cnd2OjozMzZoNEApNzdpOGc3aGQ7NzNkOTU0aGdhamFtMmRzM15hMi1kXjVzc2EzMmE0XzEvMmNgNC8tMzE6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/e6b2151884044fa79162f6adae961417?auth_key=1777923433-344c6085a3a64241ae6ddadc9be743b5-0-e1e8871f4f354250a593b449dfe73a2c&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732414648090633",
+      "name": "Liên Minh Phế Vật",
+      "episode": 28,
+      "play": "https://alicdn.netshort.com/o4EXE9f4qPpNfQqPpwIHrIFQqDADwafSC7gkD0?a=0&auth_key=1777944359-898e1bd7a6b84dd1bcdb0630771885e6-0-0ad165ac7f7461ddd99e7186fb0a338e&br=1319&bt=1319&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=9b9d86bd773941849a8a2a81e83a81ec&er=0&l=202604250230289640AC9086AB8D390CC7&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M3duZ245cmt0OjozMzZoNEApaDs2aDs1Ozw7NzY6ZTs8PGdtMGJzMmQ0NGRhMi1kXjVzc2AuXjUuXl5eMS42NGEzYV86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/9f8889d5195b4d618db3db093b6ef458?auth_key=1777919870-f13d8c4fdf114d8bbfcb96bbd9408e55-0-7f2e5f1571ce6f14d8420ba043a35a47&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423078641665",
+      "name": "Liên Minh Phế Vật",
+      "episode": 29,
+      "play": "https://alicdn.netshort.com/owL1wIhED0sybCvRqEfYfoQ67Fe1kpAqopXNRV?a=0&auth_key=1778219552-8eea8fb3d7a9453cb361049f4878d6a6-0-d1e6a93477236863d6c7254ad0535ad9&br=2503&bt=2503&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=15f2499c4e0b4628996c3f2ca947fd60&er=0&l=2026042314343265046300B58A87301515&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=amttZ245cjt1OjozMzZoNEApOWk3ZDU2OTw1NzM3PDdpNGdfamJzMmRjbV5hMi1kXjVzcy1hNDZgY2A2NTNfYmA2LzI6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/8ec8ead6ade448c79d45c57b80524f43?auth_key=1777923433-260c6d25006c4fc6b28b95662a566ffd-0-44c8aad88983734fb22c0d44f1ea759f&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423443546114",
+      "name": "Liên Minh Phế Vật",
+      "episode": 30,
+      "play": "https://alicdn.netshort.com/okYqYfbV7qQNDSUEQ0pEfyCwvA1FIxa1pRyeWL?a=0&auth_key=1778219553-a84e81d37cc74e59a406f0ac1522b532-0-18c62cfbdd195ec9669038286b1c9323&br=1387&bt=1387&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=4367435c41164e7d84e0817c540e51b9&er=0&l=2026042314343365046300B58A8730151E&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2ttZ245cmZ1OjozMzZoNEApZTgzODo7aDs6NzQ3ODc5N2dgamJzMmRrbV5hMi1kXjVzczYuYjFgLi0xYWIzLmAwNDA6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/04a7e31507a54d0ea2d03c89d87e10be?auth_key=1777923423-effba02bb65d41549212fad7c673a3f9-0-9e14b53ead3d331e17772bc0144acd52&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423514849295",
+      "name": "Liên Minh Phế Vật",
+      "episode": 31,
+      "play": "https://alicdn.netshort.com/oASQtEYZV50vS6GvtIi2Ai61GAOBzK4sqIfHLR?a=0&auth_key=1778052192-d7a5522c0f084c71a4dd27c40ce5b76a-0-83ac322033be30c5e7fce5d40023acc1&br=1587&bt=1587&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=129efecb400f43c8b7276dd46d6648a7&er=0&l=202604251704076158941FFB9AE638350B&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2s7dXM5cmZ1OjozMzZoNEApZDc5OWc5NWVmNzM3Zmk8NGc2amFtMmRzbF5hMi1kXjVzczQ1M2ExYTQ0NTBjLV9iYi86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/591cb8c32422416b9497aa80a891b128?auth_key=1777923422-d5b18d103640429f87cb75ef6120b5e4-0-8dc004e5b4b7da7f4f77d1386d5c3d29&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423556792331",
+      "name": "Liên Minh Phế Vật",
+      "episode": 32,
+      "play": "https://alicdn.netshort.com/oYQfenexadA6DAFLWexVeOdePToWX6zIdIvgEj?a=0&auth_key=1778052172-fc6f5ccd24da4757a3fef690f9d5604c-0-5fac28bc824777d6ba750fb93b71626a&br=2470&bt=2470&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=f70571d608364381b3dfd428cf4247ff&er=0&l=2026042517040616590722EFDF183A23E6&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2lpaHU5cnd1OjozMzZoNEApaTc3ZjVnZ2U7NzYzZzozaWdzY3NnMmQ0bF5hMi1kXjVzc2M0L2M1MWMwLjAzNTMuMjQ6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/0de78973072e425085c36dd93ec79f78?auth_key=1777923423-b471860a02064e9d8debb851330509b3-0-3b565fd95827e107732b24e5098efc55&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423594541060",
+      "name": "Liên Minh Phế Vật",
+      "episode": 33,
+      "play": "https://alicdn.netshort.com/o4RNp1Ez0YeIDVwUq1xkvhqIDffxFAQR7CTpbE?a=0&auth_key=1778052156-00a5315ad8bb452791fef69e66efcba6-0-9bfe29010b13bb236bc830fe9a9aaa0f&br=2272&bt=2272&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=b6c4aade3e904cf0816af3d1ffbaed5d&er=0&l=2026042517040916590722EFDF183A23FD&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=amttZ245cnN1OjozMzZoNEApOGhlaWdpOTtpNzw2Z2RmZWc1amJzMmQ0bF5hMi1kXjVzc2FhXmMuMF4uLWAtYmJeMTM6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/f67b5ac3948c4b158940af3dd05cb68d?auth_key=1777923423-f8e2244cee2244dc861292f7e38f4cbd-0-3b2971180ec552f5aafab736864feaee&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423640678405",
+      "name": "Liên Minh Phế Vật",
+      "episode": 34,
+      "play": "https://alicdn.netshort.com/oYqTfIhYofpIBbPmVgLQqegGZeWIGc3IBUFdWR?a=0&auth_key=1778161729-5585e2a346d743aca7d805a8727d9f59-0-8d4e4297e3e226e8c723ed813c692c1e&br=1992&bt=1992&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=aa35442dfdb7441099151f9d8877129c&er=0&l=202604251704022B80D8741123E939B7D4&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=MzVyPGw5cmV1OjozMzZoNEApPDQ6Ozw0NDw0N2VpNTc2ZGcvMGAyMmQ0bF5hMi1kXjVzc2AvNDVhYzI2LTE0YWExMl46Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/9b839a57d67a457eb098404211d13971?auth_key=1777923433-e07db1ee0ce44eec960a20dc78d10e1b-0-8ea0de320e9a3e96b6ccaec1a487e528&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423602929675",
+      "name": "Liên Minh Phế Vật",
+      "episode": 35,
+      "play": "https://alicdn.netshort.com/o82a3WMLAWfiiIFqBCQgfeUIBn3e8bnWTuZtVK?a=0&auth_key=1778052170-52ffb0af0e9c4562b38f3a7b73c96af3-0-cdf049a9ea73e7584ed3a81ee3254e86&br=1366&bt=1366&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=a5d6071c4a9b45699ba3839d32723685&er=0&l=202604251704082FCD2940E5FE1B55A4A6&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2ttZ245cmt1OjozMzZoNEApOzY6Njw7ZDw5Nzw3NDNnZGc1amJzMmRjbF5hMi1kXjVzczIzLy9hMDBfNjJfXmA0MzI6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/bf14b188f72c433f809328d496e274cb?auth_key=1777923423-6da9b3cd76d347508d6bbe0d14ff8272-0-072bb409ced935b909df7dc01282f347&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423619706892",
+      "name": "Liên Minh Phế Vật",
+      "episode": 36,
+      "play": "https://alicdn.netshort.com/ocMVuEq1ffQlqwfagDNpLMCKvEAwFqvDVbyIDk?a=0&auth_key=1778052160-5c4ca6a183334caa99b3a1965297c06a-0-ff673dd7b9b2260e79a98463bbe51d51&br=2388&bt=2388&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=fc02f33039be4bcebdf16943487f730e&er=0&l=20260425170413C8F67C8123961E56F6E9&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajVyPGw5cmV1OjozMzZoNEApMzo6Nzc5aWVmN2U2NmkzaWcvMGAyMmRrbF5hMi1kXjVzc2IwYzUwNi5hYl9iNi0wL2A6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/9da64f19759641308dc08e66254db2bd?auth_key=1777923425-e571f43958534791b94210a5bc4da4b5-0-1dd8a9169df59baab32a558897132b76&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732578620211209",
+      "name": "Liên Minh Phế Vật",
+      "episode": 37,
+      "play": "https://alicdn.netshort.com/o0AbVpbCnWyEqiFNviIgamfwUvqfsEzVCf1QUD?a=0&auth_key=1778533730-e5f1ba78eb454f018c4cc708e90f6585-0-f6cb44c02fff3b33bb9085e309d6856a&br=952&bt=952&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=20e85259a832488283b8ea9bef0603e2&er=0&l=2026042702282093C212189DA338634044&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2s7dXM5cjR1OjozMzZoNEApaDMzaDxoZTs7NzZkODhoNWdfamFtMmQ0bV5hMi1kXjVzcy8wM2NfXjUwLzUvNTYvNS06Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/7b5107449fa54bd7904be0bc3ebc12b8?auth_key=1777923424-5c5abe049dd545458920f02816874b2d-0-ee7879c7bd520f31f74610920a6b59ab&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423711981574",
+      "name": "Liên Minh Phế Vật",
+      "episode": 38,
+      "play": "https://alicdn.netshort.com/oYqVCRK6fvITz5HNQBG0tVAXviAsi1XLztKE25?a=0&auth_key=1778161727-552c3cb34a63448a96e067f767bbc801-0-5fec5cd2f8101a2507e8e487319f1a19&br=814&bt=814&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=c9eb102d3e1a409fa62bc3ebf5e5c11f&er=0&l=202604251704036158941FFB9AE63834F3&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ams7dXM5cjR1OjozMzZoNEApNGZoaWhmNWQ8NzQ2NTRoZmdfamFtMmRjbV5hMi1kXjVzc2MuMjJfMF8zYy1eYmEtXzY6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/83f822c23bdd476d8f9ae89ae26b4b34?auth_key=1777923425-d727293f603c42c2af608672946a1c2c-0-c30fc749a08456f0ea4dab10924b88e1&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423598735382",
+      "name": "Liên Minh Phế Vật",
+      "episode": 39,
+      "play": "https://alicdn.netshort.com/oYVHUcXLiA8nWt5dBFSpaRviIQN6WuzqvWELj?a=0&auth_key=1778052181-9b4ddb4f90ff4ff1b14afe430012bc13-0-3b46f4a0551b4553df98deb68810157a&br=526&bt=526&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=c42897ab77b04cc086111b6b6582c40f&er=0&l=202604251704108305D74858EA8B39FCA4&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2s7dXM5cnZ1OjozMzZoNEApM2Y7OTk0NDtmN2U6ZDw1ZmdeamFtMmRrbF5hMi1kXjVzc2MxLzJfXy4zLWAtNF80NTE6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/f5f845818b204b7cabb2fb41e699afe0?auth_key=1777923410-e49353874f8b43a19c0447c91b293138-0-6e121ef9ac7f408e8bff9c454f2a929a&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732580755111947",
+      "name": "Liên Minh Phế Vật",
+      "episode": 40,
+      "play": "https://alicdn.netshort.com/oYCvfSK4eFPXnqagQpEDzLf8IHQqqPUbAwDMkN?a=0&auth_key=1778184743-5b5055f25bbe444aa8f3b609b43a51c3-0-1699bfd9f055bf55979a1b4b47bdfda6&br=884&bt=884&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=9b4fbe638bae484f89e4f6c524c922b4&er=0&l=20260425023036B727C5DB96691D335FC2&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=Mzg8dXM5cm10OjozMzZoNEApZTVmNWZpaDs3N2Q7OWU3PGdjMWFtMmQ0NGRhMi1kXjVzczEvNjEyMzE2YzViXzBiY186Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/65ad854e7752422db2d004c9d613f64d?auth_key=1777919871-d97e8cacf4e74e16b21240ff0da13caa-0-307eeafa1af2e3e92d2e4bd8e41a3696&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732580713168908",
+      "name": "Liên Minh Phế Vật",
+      "episode": 41,
+      "play": "https://alicdn.netshort.com/oASheKOiclNmQEZIFCipfpbBqYwwdAZEfa4qIy?a=0&auth_key=1778184732-02548465318341f583922565ef1f7987-0-686913ffb2d0ac664c23d8c95e4fd8bf&br=2396&bt=2396&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=acd3b389ab0747d7b3746c3716f3d521&er=0&l=202604250230327B7A75DEB1587F5011C2&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2xyPGw5cml0OjozMzZoNEApNWdpNDY5OmVnNzNkO2VnZGdgZGAyMmRjNGRhMi1kXjVzcy4yMDM0YDEwNDQ0XzYwMGA6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/854d4c963440415fb2577ea1ad5da7bf?auth_key=1777919871-38ce4bab1b094fe6af5a097b1ef4a429-0-b0c19a32733a427704667be3ba8844e7&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423732953102",
+      "name": "Liên Minh Phế Vật",
+      "episode": 42,
+      "play": "https://alicdn.netshort.com/okXyQwEDf9fA2pzgzpcVqpiIQXFzrNf1pbCKLq?a=0&auth_key=1778161710-8daf33ec9e894cb69dd6b149c1d79c64-0-ca0e515146526d7c01191d40ec4c29ba&br=1091&bt=1091&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=d6e6ab1959f241df8c8b1f6c2d9c3f4c&er=0&l=202604251704019645CE67D5945239E5AC&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=am5tZ245cjl2OjozMzZoNEApNzY8NTk0OztnN2k4NGRoZ2dsamJzMmRzbV5hMi1kXjVzc2BjYGFgY19gYy4vNjZfMzM6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/fb95687b7329431e83bef281c7584a78?auth_key=1777923424-aa8ed063530c4a71887ac2aa2da72cc0-0-7721b7821cd800ba15fd43c1802fd82c&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423749730313",
+      "name": "Liên Minh Phế Vật",
+      "episode": 43,
+      "play": "https://alicdn.netshort.com/oMQJrpCqvCcYVqNyuxIfGFEAymDP01gerfoYdw?a=0&auth_key=1777500235-c9951bcda02a43078e961ae442086b6d-0-b40aa6d78a7ecb7a88bfeadb84061c94&br=1397&bt=1397&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=b56b953ed153437dae3f34ec359cdde8&er=0&l=20260415143745121C5860FE4588093966&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M3Q1eHE5cjl2OjozMzZoNEApaGc8Nmg2NmQ6NzhnNjw5ZWdeL19eMmQ0bV5hMi1kXjVzczVhYDJgMWNiYTAwLmIyXzI6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/a65091c444ea4d40b080c5b684467626?auth_key=1777923408-23a8166fbad5464492ffd9154e36e70f-0-63c97f019eb2828920d4ee2aea531220&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732580868358146",
+      "name": "Liên Minh Phế Vật",
+      "episode": 44,
+      "play": "https://alicdn.netshort.com/oQviaQXFBliN6XTVR3jIEBbmAKl5zoM7TydW3?a=0&auth_key=1777525623-bb9aca2b91934118b3f646f21a9598ce-0-771824a12334424eb9d965fea24e1432&br=1173&bt=1173&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=c1825289047e456286134540179632ef&er=0&l=202604151438039801C37CADCF4E0D91BE&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajhyPGw5cjt2OjozMzZoNEApaDY8NDc3NDs5NzozOzg7ZmdvMGAyMmRrbV5hMi1kXjVzc2MvMzQtMjAzLzJiMTYvLy46Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/fe6c1d59d7bb4526b6b1c20e85b0ff2f?auth_key=1777923424-68913130ab1e4793b0579b0982d72e33-0-cf1fe170c46d906a872727cc8dcac795&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423808450566",
+      "name": "Liên Minh Phế Vật",
+      "episode": 45,
+      "play": "https://alicdn.netshort.com/o8Xx9tEEIAqpEN4f1pFwhlXBxJP1OqfeDCaNQp?a=0&auth_key=1778184766-4fbb5278878046fda2a50801a316c464-0-383ceb769eb792e1ff3d8d3e287b3d31&br=1400&bt=1400&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=8b6e92a3473a4f3e872899d44f019667&er=0&l=202604250230272C666AED1BC87E33D805&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=anduZ245cmt0OjozMzZoNEApOTwzN2c8NTs2NzY3ZDw5O2dsMGJzMmQ0NGRhMi1kXjVzczQzLmMxNjU0YmNeNDAvYl86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/6bde99cae61147f7bb47377fed1fb1e5?auth_key=1777919855-43eae487d7a34bc2b37439059542427b-0-6b653ec5f98a26af34042e04e7004133&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423737147406",
+      "name": "Liên Minh Phế Vật",
+      "episode": 46,
+      "play": "https://alicdn.netshort.com/oI61A0fDwIp7N7pqezy3v1UcVCUfdEzNFQNdEq?a=0&auth_key=1777500270-fd1204d5dd524ee8a62a70e186c91ac8-0-0b2c3c0434383f0cf820bb606120b382&br=1058&bt=1058&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=7a7f8b3779864a7ea899098df9f276a3&er=0&l=202604151437489801C37CADCF4E0D913C&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=am5tZ245cnF2OjozMzZoNEApZDppaTszPGQ6Nzs6Njs6OmdvamJzMmRjbV5hMi1kXjVzczAzLzZhNjY1Yl4zNjRfY146Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/fc37a9ea380040339d64784e055e3467?auth_key=1777923410-7f8d37fac1e441219329781203ed1629-0-a810c83fbb84e56964372e43c12b5b75&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423783284749",
+      "name": "Liên Minh Phế Vật",
+      "episode": 47,
+      "play": "https://alicdn.netshort.com/oYUp8fQVgifFkE5mWfbppqfrZkD6BFaI2gnT9r?a=0&auth_key=1777500276-42c7e336304546a786afc1a1ba46070e-0-0a7521919b1f1048795a6e02bdd71efd&br=962&bt=962&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=37c79fa43cfd49e59607ae00d12386ce&er=0&l=20260415063743BE8B7C8378F720097AD7&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M25tZ245cjp2OjozMzZoNEApZjs1ZzNkMzxoN2k2ZDxmNmdtamJzMmRzbV5hMi1kXjVzc2IzMC4tYjQzMjZhYDFjNDQ6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/42f9d82d3a554d5e8e32132992ba2cab?auth_key=1777923426-88f5527145d64dc09ace033f030dac1e-0-643d1fdb8f7638ba8cbf2bc55d5f159e&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423682621445",
+      "name": "Liên Minh Phế Vật",
+      "episode": 48,
+      "play": "https://alicdn.netshort.com/oUzykQwDpCzpUm7FEMacpfIeqA0Vf11q1NETPn?a=0&auth_key=1778052176-953458794cea46dda2f192bd3a993c33-0-2ecdec856b4f4e53f562f44337a34d7f&br=961&bt=961&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=b73b761dc7d24879bc85e63da166c431&er=0&l=202604251704118305D74858EA8B39FCAE&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=am5tZ245cjx2OjozMzZoNEApNmY5ZDZoO2U6N2dmNDo2ZWdtamJzMmRzbV5hMi1kXjVzcy4xMy5hMzJgNjUvNGEzXzQ6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/6dd1790eddef4a07b435733bd5f6bf1b?auth_key=1777923408-483007f8ca1c4fdaa648d415a88994fe-0-0f949298cbb2ab7aa5d4a21bc9dc8db5&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423821033480",
+      "name": "Liên Minh Phế Vật",
+      "episode": 49,
+      "play": "https://alicdn.netshort.com/oQQbUbFTWwhpdLHaTefGFVgUg2Bef974UIlXI0?a=0&auth_key=1777944328-618d38a26557460ea1f09f3a44f72bec-0-77e9e5a70f521198b88439ea74703715&br=1317&bt=1317&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=17d54037cb51445496d8b099bfb4af58&er=0&l=202604250230317B7A75DEB1587F5011B9&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=anduZ245cml0OjozMzZoNEApOGRlZTxlZzw4NzhmNjdnNGdrMGJzMmRrNGRhMi1kXjVzczVjMWM2LTUzMTEuXzQtMjQ6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/653dfba7665a44eeaa7bfc6806c02c91?auth_key=1777919871-1a48cbfbf4ab4210b5c4c0581d187cf0-0-f3fbeea8bb46ecb6a59b060aaaa424ee&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732424005582863",
+      "name": "Liên Minh Phế Vật",
+      "episode": 50,
+      "play": "https://alicdn.netshort.com/ow3ZIsiBrmfA37jQz0uV1zzEbTiU7Gv672AEHK?a=0&auth_key=1777500283-d548358f833e4cd1aa6806379c3904fe-0-8f3624fe8dafb39f9cb1df889627d251&br=1426&bt=1426&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=a26701de72444ba6949f2f8dac7dd305&er=0&l=20260415143750D0D2005B0C919108BE6D&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=am1paHU5cnV2OjozMzZoNEApM2c6ZDs1PDxkNzc6ZzM5ZGdtY3NnMmRjbV5hMi1kXjVzczIwYWBhY2MxM18xL2IuNC86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/bc6a112e89f8444ea9add73ffbee0b48?auth_key=1777923425-c4eb504fdc3f4aeb8dde20c4bad74b4c-0-a6dca54401698fa6a84b83dcf156fcc8&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732424068497418",
+      "name": "Liên Minh Phế Vật",
+      "episode": 51,
+      "play": "https://alicdn.netshort.com/og5FHFJedXfTLBfdgg3EbMpGVIgUgdBlXiqeRL?a=0&auth_key=1777500284-93590288e45a42f2aa0d75f7c4ca6a2c-0-10fca41bd941f4d787b05d6c45fd9627&br=1301&bt=1301&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=bc49dc72ca9f4f15ad1d1abda86e5c9f&er=0&l=2026041514375266DDCD0771C229091307&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=anQ1eHE5cjR2OjozMzZoNEApPDg5ZGU0NGQ0NzxmOmc3ZWc1L19eMmQ0bF5hMi1kXjVzc2NgYjVhXmFhMmNjXi9gNmA6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/9a3b4e8656f34d04a34fad6952247a89?auth_key=1777923408-c6e9411db21e4376bc18a141e192e08a-0-a899bec6d0feb0027ddaeb9a37c7117a&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732580826415113",
+      "name": "Liên Minh Phế Vật",
+      "episode": 52,
+      "play": "https://alicdn.netshort.com/oEs3paVNDEDHDh3PfeFQw2NOiCfRpRAIEbq3q4?a=0&auth_key=1778184751-cd0c7c58a0b64697bea6187dc26991a2-0-029961e6c5eba469d6c4ba707bab1c8a&br=1184&bt=1184&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=65b3ca965c36492db13b5944059dd002&er=0&l=20260425023029C384A9434F5B4236B70D&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajVpaHU5cm10OjozMzZoNEApM2c8Mzc4NmU1NzY4PGZlOWcucXNnMmRrNGRhMi1kXjVzcy8tYTIxNl8uYTYzYDNeMDI6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/4995d5f6606940d3ae163fe00c490634?auth_key=1777919855-65c0fbe5f1354ef492278ff61d713fbf-0-23f8e0caa9c321ac4bab9afd5deee170&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423795867651",
+      "name": "Liên Minh Phế Vật",
+      "episode": 53,
+      "play": "https://alicdn.netshort.com/oUEpIwRfaPEQ3fqNPS4pNgFPKz8D3nqAf93TDC?a=0&auth_key=1777944337-ccd5a6e5c8c9475fbaebe36d847adc92-0-fe69fbeb683a9c7df8369215e8b95d80&br=1396&bt=1396&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=67340370325045ef9c2dc0b87476d229&er=0&l=20260425023035361A053A525F1636D274&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajVpaHU5cm10OjozMzZoNEApNWc6OmVmNTxoNzg2OjM2OWcvcXNnMmRzNGRhMi1kXjVzczYvMzE1LWFgYzItLy0wMTQ6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/9508f38a002844c1bcbf6ea01ec5328b?auth_key=1777919871-8fa54657042f4ef38c8f4750231cb8e6-0-e08dbdbdf7748c5b4c931777a954f162&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423707787278",
+      "name": "Liên Minh Phế Vật",
+      "episode": 54,
+      "play": "https://alicdn.netshort.com/osv1A1I0sijQdGcEHchfAip8HBRYzNI5FkSqtK?a=0&auth_key=1778184767-cd68c940ca4d41b9bee2baad63063351-0-7a9339598e489f569aab6c750a2a3dbd&br=1879&bt=1879&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=798a1b69cb4a434a88c6830804114fa2&er=0&l=20260425023037F5E4BEBEC8D5064D9CD6&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=Mzg8dXM5cmt0OjozMzZoNEApZDc0MzM7Zjs3NzdmOTQ7OmdiMWFtMmRzNGRhMi1kXjVzcy9jLjE1MDM1XjBeXzZfXjY6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/8194a6ca8f3848a0bb185c6154e99fad?auth_key=1777919872-8685ef5dfbe1443e81df0cbce125e131-0-f3f34235e8da736c3ce4f5d624143ba4&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732580838998020",
+      "name": "Liên Minh Phế Vật",
+      "episode": 55,
+      "play": "https://alicdn.netshort.com/oMD3IE3QPEp4JFQqiwWfn3tGoeTBCNqNhpIafA?a=0&auth_key=1777944332-f31c7684200d4045931afbd3151511a5-0-81399d77cdde4e76edefb722cd9e6bcc&br=1317&bt=1317&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=82ed79d7de8243098f37befdccbc9656&er=0&l=202604250230339640AC9086AB8D390CF6&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajVpaHU5cmx0OjozMzZoNEApODxlZmllNjszNztnZzpoO2ctcXNnMmRjNGRhMi1kXjVzczMzYGBhYjRjNjAvYjQ2YS86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/60b48a166e0341939fe5e63aeddcbb98?auth_key=1777919856-0efee80a7d794aefbaa467fe1ad1748b-0-e067755690db4390b36747aa499e9f80&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732423904919554",
+      "name": "Liên Minh Phế Vật",
+      "episode": 56,
+      "play": "https://alicdn.netshort.com/o8C2SnoLOIeIoeL2OVRBAveApSre0XnDfPhgLG?a=0&auth_key=1778184747-9e8e56dcc70e48b6ae912184b6f3d6ab-0-4e8ab5b5cec2a45cdeac311ea2e49078&br=1401&bt=1401&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=bb9e5ab7f072494298392f0e6f847d57&er=0&l=20260425023026A32D5D78945BD9515557&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=ajg8dXM5cmx0OjozMzZoNEApODo7OTM1Njw3NzppZTg8ZWdiMWFtMmRzNGRhMi1kXjVzczRhMWNiYzY1LzYvLTReYl86Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/b9ab66abc6654486ab49b7ce9f439f45?auth_key=1777919856-d92ccdb4c41e42a79353bf036cd5920a-0-687f1d54227b274235e938da516072f4&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732431760850952",
+      "name": "Liên Minh Phế Vật",
+      "episode": 57,
+      "play": "https://alicdn.netshort.com/ow4uBn8MgAnRbaTU22fZdqG2WFTffQr6WBf5iV?a=0&auth_key=1778252895-ab2749ff096c4861ad4b5a4a7029ef9d-0-6e962e36d9d9f1892b75f6e9164cde52&br=1117&bt=1117&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=9ffc84cc60154df49e2cc410ebb9ea82&er=0&l=20260424143318180AD229F305DA34080C&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=amptZ245cnl1OjozMzZoNEApO2hlaDRmNTxpNzQ5ZjtpPGdtamJzMmQ0Xl5hMi1kXjVzcy9eNl8tMWBiMWEyLWAxYGM6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/2873da7ba2af44e18fced2b1d43f957b?auth_key=1777923411-8bc987d76d064ee09f9237e3240570ab-0-97c1afce4e6bf76c671e0b53dfdd8c07&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732431693742083",
+      "name": "Liên Minh Phế Vật",
+      "episode": 58,
+      "play": "https://alicdn.netshort.com/oQpVVpr9EKTbfFmL2gwQfqAtF9l1CoDpqIkfNh?a=0&auth_key=1777500283-14035840fe6242b09a7b3664d111fc0c-0-efe4c5e23bc39988a767312175bf7cd0&br=1422&bt=1422&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=48c632b6d94144159ec36b299c331bb3&er=0&l=202604151437547329C33B5B46860D98DB&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=M2ptZ245cnl1OjozMzZoNEApZTQ2PDU5Zjw0NzdnZTZmN2duamJzMmRjXl5hMi1kXjVzczBfMGA2XzBiMjEuNjMvMzU6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/1a720455c6fa4eb0a5cb4d30985d0f46?auth_key=1777923411-852218c69dca428080afc099c7f75797-0-d026c1c92a4bce8f55b44cae699dfb49&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732431676964878",
+      "name": "Liên Minh Phế Vật",
+      "episode": 59,
+      "play": "https://alicdn.netshort.com/oQqf1FE2j4DQbGVQreO7FrVBfpgQnTEUt0Ie1k?a=0&auth_key=1777500299-3fec120129a44a9d97eaf23a2a8049cc-0-4b181200e2b4dc9eb76d14dde1618cfe&br=1049&bt=1049&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=f75579c280174c449c9fd26476a949d0&er=0&l=202604151437533B0BA18895099F089273&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=amptZ245cnl1OjozMzZoNEApZzdkOjlnPDw3NzQ7Zjo4aWduamJzMmRrXl5hMi1kXjVzcy02NjMxL2NgMWA0LS82MjQ6Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/d9a521aef87d4d6aa0dec8960d8cc4b4?auth_key=1777923412-53fc10322c16462abe1d127401498200-0-e2cb2e6e2da853b7744d71e90ebeb49e&mime_type=text_plain"
+        }
+      ]
+    },
+    {
+      "id": "2041732431798599693",
+      "name": "Liên Minh Phế Vật",
+      "episode": 60,
+      "play": "https://alicdn.netshort.com/okp3iFNqEEvIq34eahfPEOOfN236pDw3AQwHCK?a=0&auth_key=1778184746-0b08fe7e37144246b0cea735d2211d88-0-38eca2af4c56f04798443f0623a6fa09&br=1093&bt=1093&cd=0%7C0%7C0&ch=0&cr=1&cs=&cv=1&dr=4&ds=4&eid=61f2b73fa39042e0b0718ef9f9f02854&er=0&l=20260425023035486FEBB0F9105735C29B&lr=&mime_type=video_mp4&net=0&pl=0&qs=0&rc=MzVpaHU5cm10OjozMzZoNEApODVpaWk7OmVoNzxkNmVpOWcvcXNnMmRrNGRhMi1kXjVzczE1LTY2Yi4tLS8tMGM0Ly46Yw%3D%3D&vl=&vr=",
+      "onSubtitle": true,
+      "subtitle": [
+        {
+          "url": "https://alicdn.netshort.com/d64e71406d51443192fb59281ef50c56?auth_key=1777919856-8c2ccefc772b4f368b8aeb399d50d47f-0-f4628b5075e6964a8d53b9cd23346ec1&mime_type=text_plain"
+        }
+      ]
+    }
+  ]
+}

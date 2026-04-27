@@ -1,6 +1,8 @@
 """XemShort pure helper functions (no workers, no dialogs)."""
 from __future__ import annotations
 
+import base64
+import gzip
 import json
 import os
 import platform
@@ -8,6 +10,7 @@ import re
 import shutil
 import subprocess as sp
 import sys
+import zlib
 from pathlib import Path
 from typing import Optional
 
@@ -49,16 +52,86 @@ def _ns_color_to_ass(color_str: str) -> str:
 
 # ── API / JSON helpers ────────────────────────────────────────────────────────
 
+def _ns_b64_decode_safe(s: str) -> bytes:
+    """Base64 decode with padding fix and URL-safe normalization."""
+    s = s.strip().strip('"').replace("\\/", "/").replace("\n", "").replace(" ", "")
+    padding = 4 - (len(s) % 4)
+    if padding < 4:
+        s += "=" * padding
+    return base64.b64decode(s)
+
+
+def _ns_try_decrypt(raw: bytes) -> "dict | list | None":
+    """Try multiple decode/decrypt strategies on raw bytes.
+
+    Order: plain JSON → GZIP → ZLIB → AES-ECB/CBC (pycryptodome optional).
+    Returns parsed object or None if all strategies fail.
+    """
+    # 1. Plain JSON
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except Exception:
+        pass
+
+    # 2. GZIP
+    if raw[:2] == b"\x1f\x8b":
+        try:
+            return json.loads(gzip.decompress(raw).decode("utf-8"))
+        except Exception:
+            pass
+
+    # 3. ZLIB
+    if raw[:1] == b"\x78":
+        try:
+            return json.loads(zlib.decompress(raw).decode("utf-8"))
+        except Exception:
+            pass
+
+    # 4. AES (pycryptodome optional)
+    if len(raw) % 16 == 0:
+        try:
+            from Crypto.Cipher import AES as _AES
+            from Crypto.Util.Padding import unpad as _unpad
+            _KEYS = [
+                "xemshort-secret-", "xemshortSecret16", "netshort12345678",
+                "0123456789abcdef", "xemshort.top/api", "1234567890123456",
+            ]
+            for k in _KEYS:
+                key = k.encode()
+                if len(key) not in (16, 24, 32):
+                    continue
+                for mode, iv in [(_AES.MODE_ECB, None), (_AES.MODE_CBC, b"\x00" * 16)]:
+                    try:
+                        cipher = (_AES.new(key, mode, iv=iv) if iv is not None
+                                  else _AES.new(key, mode))
+                        plain = _unpad(cipher.decrypt(raw), 16)
+                        return json.loads(plain.decode("utf-8"))
+                    except Exception:
+                        pass
+        except ImportError:
+            pass
+
+    return None
+
+
 def _ns_parse_episodes(data: dict | list, movie_name: str = "") -> list[XSEpisode]:
     """Parse API response (dict or list) into a sorted list of XSEpisode objects."""
     if isinstance(data, dict):
-        items = data.get("shortPlayEpisodeInfos")
-        if not items:
-            items = data.get("data", [])
+        items = (
+            data.get("shortPlayEpisodeInfos")
+            or data.get("episodeList")
+            or data.get("episodes")
+            or data.get("data")
+            or data.get("list")
+            or data.get("result")
+            or []
+        )
+        if not isinstance(items, list):
+            items = []
         if not movie_name:
             movie_name = data.get("shortPlayName", "")
     else:
-        items = data
+        items = data if isinstance(data, list) else []
 
     episodes: list[XSEpisode] = []
     for item in items:

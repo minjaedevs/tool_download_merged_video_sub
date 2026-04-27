@@ -40,6 +40,7 @@ class XSMovie:
     save_dir: Path = field(default_factory=lambda: Path("."))
     start_time: Optional[float] = None
     end_time: Optional[float] = None
+    movie_id: str = ""  # unique ID so _ns_show_picker can merge into existing rows
 
     @property
     def selected_count(self) -> int:

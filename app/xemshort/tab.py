@@ -46,6 +46,8 @@ class XemShortTab(QtWidgets.QWidget):
         self.movies: list[XSMovie] = []
         self.nsworker: XSDownloadMergeWorker | None = None
         self._ns_iterator = None
+        self._fetch_instance_id: int = 0          # instance_id của fetch worker đang active
+        self._fetch_workers: list[XSFetchWorker] = []  # giữ ref để tránh GC khi thread đang chạy
         self._build_ui()
 
     # ── Settings ────────────────────────────────────────────────────────────
@@ -222,11 +224,15 @@ class XemShortTab(QtWidgets.QWidget):
 
         # ── Input group ──────────────────────────────────────────────────────
         inp = QtWidgets.QGroupBox("Thêm phim")
-        inp_layout = QtWidgets.QHBoxLayout(inp)
-        inp_layout.addWidget(QtWidgets.QLabel("Movie ID:"))
+        inp_vlay = QtWidgets.QVBoxLayout(inp)
+        inp_vlay.setSpacing(6)
+
+        # Row 1: Movie ID input + Fetch button
+        row1 = QtWidgets.QHBoxLayout()
+        row1.addWidget(QtWidgets.QLabel("Movie ID:"))
         self.ns_movie_id_edit = QtWidgets.QLineEdit()
         self.ns_movie_id_edit.setPlaceholderText("VD: 2041732413888921612")
-        inp_layout.addWidget(self.ns_movie_id_edit, stretch=1)
+        row1.addWidget(self.ns_movie_id_edit, stretch=1)
 
         self.ns_fetch_btn = QtWidgets.QPushButton("Fetch Data")
         self.ns_fetch_btn.setStyleSheet(
@@ -235,17 +241,22 @@ class XemShortTab(QtWidgets.QWidget):
             "QPushButton:hover { background-color: #1d4ed8; }"
             "QPushButton:disabled { background-color: #93c5fd; color: #fff; }")
         self.ns_fetch_btn.clicked.connect(self._ns_on_fetch)
-        inp_layout.addWidget(self.ns_fetch_btn)
+        row1.addWidget(self.ns_fetch_btn)
+        inp_vlay.addLayout(row1)
+
+        # Row 2: utility buttons always visible
+        row2 = QtWidgets.QHBoxLayout()
 
         self.ns_clear_cache_btn = QtWidgets.QPushButton("Xóa cache")
         self.ns_clear_cache_btn.setStyleSheet(
-            "QPushButton { background-color: #374151; color: #9ca3af; padding: 5px 10px; "
-            "border-radius: 4px; }"
-            "QPushButton:hover { background-color: #7f1d1d; color: #fca5a5; }")
+            "QPushButton { background-color: #7f1d1d; color: #fca5a5; padding: 4px 12px; "
+            "border-radius: 4px; font-weight: bold; border: 1px solid #991b1b; }"
+            "QPushButton:hover { background-color: #991b1b; color: #ffffff; }"
+            "QPushButton:pressed { background-color: #b91c1c; }")
         self.ns_clear_cache_btn.setToolTip(
             f"Xóa cache fetch. Cache tự hết hạn sau {_NS_FETCH_CACHE_TTL // 60} phút.")
         self.ns_clear_cache_btn.clicked.connect(self._ns_on_clear_cache)
-        inp_layout.addWidget(self.ns_clear_cache_btn)
+        row2.addWidget(self.ns_clear_cache_btn)
 
         for _lbl, _meth in [
             ("Paste JSON", self._ns_on_paste_json),
@@ -253,11 +264,14 @@ class XemShortTab(QtWidgets.QWidget):
         ]:
             btn = QtWidgets.QPushButton(_lbl)
             btn.setStyleSheet(
-                "QPushButton { background-color: #6b7280; color: white; padding: 5px 12px; "
+                "QPushButton { background-color: #6b7280; color: white; padding: 4px 12px; "
                 "border-radius: 4px; }"
                 "QPushButton:hover { background-color: #4b5563; }")
             btn.clicked.connect(_meth)
-            inp_layout.addWidget(btn)
+            row2.addWidget(btn)
+
+        row2.addStretch()
+        inp_vlay.addLayout(row2)
 
         layout.addWidget(inp)
 
@@ -372,27 +386,39 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_status.setText(f"Đang fetch {movie_id}...")
         self._log(f"Fetching {movie_id}...")
 
-        self.nsfetch_worker = XSFetchWorker(api_url, movie_id)
-        self.nsfetch_worker.success.connect(self._ns_on_fetch_success)
-        self.nsfetch_worker.cache_hit.connect(self._ns_on_fetch_cache_hit)
-        self.nsfetch_worker.error.connect(self._ns_on_fetch_error)
-        self.nsfetch_worker.finished.connect(
-            lambda: self.ns_fetch_btn.setEnabled(True))
-        self.nsfetch_worker.start()
+        worker = XSFetchWorker(api_url, movie_id)
+        self._fetch_instance_id = worker.instance_id
+        self._fetch_workers.append(worker)
 
-    def _ns_on_fetch_success(self, episodes: list[XSEpisode], movie_name: str = ""):
+        worker.success.connect(self._ns_on_fetch_success)
+        worker.cache_hit.connect(self._ns_on_fetch_cache_hit)
+        worker.error.connect(self._ns_on_fetch_error)
+        worker.finished.connect(lambda: self.ns_fetch_btn.setEnabled(True))
+        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(
+            lambda w=worker: self._fetch_workers.remove(w) if w in self._fetch_workers else None
+        )
+        worker.start()
+
+    def _ns_on_fetch_success(self, episodes: list[XSEpisode], movie_name: str, movie_id: str, instance_id: int):
+        if instance_id != self._fetch_instance_id:
+            return
         name = movie_name or (episodes[0].name if episodes else "Unknown")
         self.ns_status.setText(f"Fetched {len(episodes)} tập.")
         self._log(f"Fetched {len(episodes)} tập.")
-        self._ns_show_picker(episodes, name)
+        self._ns_show_picker(episodes, name, movie_id)
 
-    def _ns_on_fetch_cache_hit(self, episodes: list[XSEpisode], movie_name: str = ""):
+    def _ns_on_fetch_cache_hit(self, episodes: list[XSEpisode], movie_name: str, movie_id: str, instance_id: int):
+        if instance_id != self._fetch_instance_id:
+            return
         name = movie_name or (episodes[0].name if episodes else "Unknown")
         self.ns_status.setText(f"Cache hit — {len(episodes)} tập.")
         self._log(f"[cache] {len(episodes)} tập (cache hit)")
-        self._ns_show_picker(episodes, name)
+        self._ns_show_picker(episodes, name, movie_id)
 
-    def _ns_on_fetch_error(self, msg: str):
+    def _ns_on_fetch_error(self, msg: str, instance_id: int):
+        if instance_id != self._fetch_instance_id:
+            return
         self.ns_status.setText("Fetch lỗi.")
         self._log(f"Lỗi: {msg}")
         QtWidgets.QMessageBox.critical(self, "Fetch lỗi", msg)
@@ -415,7 +441,7 @@ class XemShortTab(QtWidgets.QWidget):
                 if not episodes:
                     QtWidgets.QMessageBox.warning(self, "Rỗng", "JSON không chứa episode nào.")
                     return
-                self._ns_show_picker(episodes, movie_name)
+                self._ns_show_picker(episodes, movie_name, "")
             except Exception as e:
                 QtWidgets.QMessageBox.critical(self, "Parse lỗi", f"{type(e).__name__}: {e}")
 
@@ -433,20 +459,65 @@ class XemShortTab(QtWidgets.QWidget):
             if not episodes:
                 QtWidgets.QMessageBox.warning(self, "Rỗng", "File không có episode.")
                 return
-            self._ns_show_picker(episodes, movie_name)
+            self._ns_show_picker(episodes, movie_name, "")
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Load lỗi", f"{type(e).__name__}: {e}")
 
     # ── Picker ─────────────────────────────────────────────────────────────
 
-    def _ns_show_picker(self, episodes: list[XSEpisode], movie_name: str = ""):
+    def _ns_show_picker(self, episodes: list[XSEpisode], movie_name: str = "", movie_id: str = ""):
         name = movie_name or (episodes[0].name if episodes else "Unknown")
         dlg = XSEpisodePickerDialog(name, episodes, self)
         if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             selected = dlg.get_selected_episodes()
             save_dir = Path(self.ns_save_dir_edit.text() or ".")
             save_dir.mkdir(parents=True, exist_ok=True)
-            movie = XSMovie(name=name, episodes=selected, save_dir=save_dir)
+
+            # Merge into existing movie row if same movie_id found
+            if movie_id:
+                for m in self.movies:
+                    if m.movie_id == movie_id:
+                        new_eps: list[int] = []      # brand-new episode numbers
+                        reset_eps: list[int] = []    # existed + done → reset to pending
+                        pending_eps: list[int] = []  # existed + already pending/error
+
+                        for ep in selected:
+                            existing = next((e for e in m.episodes if e.id == ep.id), None)
+                            if existing is None:
+                                ep.status = "pending"
+                                ep.merge_note = ""
+                                m.episodes.append(ep)
+                                new_eps.append(ep.episode)
+                            elif existing.status == "done":
+                                # User re-added a finished episode → reset so worker picks it up
+                                existing.status = "pending"
+                                reset_eps.append(existing.episode)
+                            else:
+                                pending_eps.append(existing.episode)
+
+                        if new_eps or reset_eps:
+                            self._ns_refresh_movie_row(m)
+
+                        parts = []
+                        if new_eps:
+                            eps_str = ", ".join(f"T{n}" for n in sorted(new_eps))
+                            parts.append(f"thêm mới {len(new_eps)} tập: {eps_str}")
+                        if reset_eps:
+                            eps_str = ", ".join(f"T{n}" for n in sorted(reset_eps))
+                            parts.append(f"reset {len(reset_eps)} tập đã done → pending: {eps_str}")
+                        if pending_eps and not new_eps and not reset_eps:
+                            eps_str = ", ".join(f"T{n}" for n in sorted(pending_eps))
+                            parts.append(f"{len(pending_eps)} tập đang xử lý: {eps_str}")
+
+                        self.ns_start_btn.setEnabled(True)
+                        self._log(f"'{m.name}': " + (" | ".join(parts) if parts else "không có thay đổi"))
+                        return
+
+            # New movie: reset all new episodes to pending
+            for ep in selected:
+                ep.status = "pending"
+                ep.merge_note = ""
+            movie = XSMovie(name=name, episodes=selected, save_dir=save_dir, movie_id=movie_id)
             self.movies.append(movie)
             self._ns_add_movie_to_table(movie)
             self.ns_start_btn.setEnabled(True)
@@ -525,6 +596,17 @@ class XemShortTab(QtWidgets.QWidget):
         item.setBackground(QtGui.QBrush(bg))
         item.setForeground(QtGui.QBrush(fg))
 
+    def _ns_row_for_movie(self, movie: XSMovie) -> int:
+        """Return table row index for a movie. Uses movie_id if available, falls back to object identity."""
+        if movie.movie_id:
+            for i, m in enumerate(self.movies):
+                if m.movie_id == movie.movie_id:
+                    return i
+        try:
+            return self.movies.index(movie)
+        except ValueError:
+            return -1
+
     def _ns_update_row_btns(self, movie: XSMovie):
         running = bool(self.nsworker and self.nsworker.isRunning())
         has_done = any(e.selected and e.status == "done" for e in movie.episodes)
@@ -532,8 +614,67 @@ class XemShortTab(QtWidgets.QWidget):
             movie.remerge_btn.setVisible(not running and has_done)
         if hasattr(movie, "delete_btn"):
             movie.delete_btn.setVisible(not running)
+        if hasattr(movie, "detail_btn"):
+            movie.detail_btn.setVisible(not running)
         if hasattr(movie, "openMerged_btn"):
             movie.openMerged_btn.setVisible(True)
+
+    def _ns_refresh_movie_row(self, movie: XSMovie):
+        """Refresh all visible cells for a movie row (total, selected, status, notes, actions)."""
+        row = self._ns_row_for_movie(movie)
+        if row < 0:
+            return
+
+        # Col 1: tổng tập, Col 2: số tập được chọn
+        self.ns_table.item(row, 1).setText(str(movie.total))
+        self.ns_table.item(row, 2).setText(str(movie.selected_count))
+
+        # Col 3: Trạng thái — tính từ trạng thái hiện tại của từng tập
+        sel = [e for e in movie.episodes if e.selected]
+        done  = sum(1 for e in sel if e.status == "done")
+        pend  = sum(1 for e in sel if e.status in ("pending", "error"))
+        total = len(sel)
+        if total == 0:
+            status_text = "Ready"
+        elif done == total:
+            status_text = f"Done {done}/{total}"
+        elif done > 0:
+            status_text = f"Done {done}/{total} (+{pend} pending)"
+        else:
+            status_text = "Ready"
+        self._ns_set_status(row, status_text)
+
+        # Col 4: Kết quả — build lại từ merge_note của từng tập
+        result_item = self.ns_table.item(row, 4)
+        if result_item is not None:
+            result_item.setText(self._ns_build_result_summary(movie))
+
+        self.ns_table.resizeRowsToContents()
+        self._ns_update_row_btns(movie)
+
+    def _ns_block_movie_btns(self, row: int, block: bool):
+        """Hide/show and disable/enable action buttons for a specific row while its worker runs."""
+        if row < 0 or row >= self.ns_table.rowCount():
+            return
+        w = self.ns_table.cellWidget(row, 6)
+        if w is None:
+            return
+        for child in w.findChildren(QtWidgets.QPushButton):
+            child.setEnabled(not block)
+        if row < len(self.movies):
+            movie = self.movies[row]
+            if block:
+                for btn_name in ("remerge_btn", "delete_btn", "detail_btn"):
+                    btn = getattr(movie, btn_name, None)
+                    if btn is not None:
+                        btn.setVisible(False)
+            else:
+                self._ns_update_row_btns(movie)
+
+    def _ns_update_all_row_btns(self):
+        """Refresh all movie action button visibility (called when no worker runs)."""
+        for movie in self.movies:
+            self._ns_update_row_btns(movie)
 
     def _ns_remove_movie(self, movie: XSMovie):
         if movie in self.movies:
@@ -578,15 +719,28 @@ class XemShortTab(QtWidgets.QWidget):
 
     # ── Start / Stop / Run ─────────────────────────────────────────────────
 
+    def _ns_emit_all_episode_status(self):
+        """Emit status for all episodes (used when nothing is pending)."""
+        for movie in self.movies:
+            row = self._ns_row_for_movie(movie)
+            if row < 0:
+                continue
+            for ep in movie.episodes:
+                if ep.selected:
+                    self._ns_on_episode_status(
+                        movie, row, ep.episode, ep.status,
+                        instance_id=0, skip_instance_check=True)
+
     def _ns_on_start(self):
+        self._ns_emit_all_episode_status()
         pending = [
             m for m in self.movies
-            if any(e.status in ("pending", "error") for e in m.episodes if e.selected)]
+            if any(e.status in ("pending", "error", "downloaded") for e in m.episodes if e.selected)]
         if not pending:
-            for m in self.movies:
-                self._ns_update_row_btns(m)
-            QtWidgets.QMessageBox.information(self, "Hoàn tất",
-                                            "Không có phim nào cần tải.")
+            self._log("Không có phim nào cần tải.")
+            self.ns_start_btn.setEnabled(True)
+            self.ns_stop_btn.setEnabled(False)
+            self.ns_fetch_btn.setEnabled(True)
             return
 
         self.ns_start_btn.setEnabled(False)
@@ -607,12 +761,22 @@ class XemShortTab(QtWidgets.QWidget):
             self.ns_stop_btn.setEnabled(False)
             self.ns_fetch_btn.setEnabled(True)
             self.ns_progress_bar.setValue(100)
+            self._ns_update_all_row_btns()
             QtWidgets.QMessageBox.information(self, "Hoàn tất",
                                              "Đã hoàn thành tất cả phim trong bảng.")
             return
 
-        row = self.movies.index(movie)
+        row = self._ns_row_for_movie(movie)
+        if row < 0:
+            self._log(f"Không tìm thấy row cho '{movie.name}', bỏ qua.")
+            if self._ns_iterator is None:
+                return
+            self._ns_iterator = None
+            self._ns_run_next_movie(iterator)
+            return
         self._ns_set_status(row, "Running...")
+
+        self._ns_block_movie_btns(row, True)
 
         self.nsworker = XSDownloadMergeWorker(
             movie,
@@ -628,21 +792,42 @@ class XemShortTab(QtWidgets.QWidget):
             sub_bold=self.ns_sub_bold_cb.isChecked(),
             sub_italic=self.ns_sub_italic_cb.isChecked(),
         )
-        self.nsworker.log_msg.connect(self._log)
-        self.nsworker.progress.connect(self._ns_on_progress)
+        wid = self.nsworker.instance_id
+        self._log(f"[worker-{wid}] Bắt đầu '{movie.name}'...")
+
+        def _on_log(msg):
+            self._log(f"[worker-{wid}] {msg}")
+
+        self.nsworker.log_msg.connect(_on_log)
+        self.nsworker.progress.connect(
+            lambda d, t, i=wid: self._ns_on_progress(d, t, i))
         self.nsworker.episode_status.connect(
-            lambda ep_num, st, m=movie, r=row: self._ns_on_episode_status(m, r, ep_num, st))
+            lambda e, s, i=wid, m=movie, r=row: self._ns_on_episode_status(m, r, e, s, i))
         self.nsworker.finished_all.connect(
-            lambda m=movie: self._ns_on_movie_done(m))
+            lambda i=wid, m=movie, it=iterator: self._ns_on_movie_done(m, it, i))
         self._ns_iterator = iterator
         self.nsworker.start()
 
-    def _ns_on_progress(self, done: int, total: int):
+    def _ns_on_progress(self, done: int, total: int, instance_id: int):
+        if self.nsworker and self.nsworker.instance_id != instance_id:
+            return
         pct = int(done / total * 100) if total else 0
         self.ns_progress_bar.setValue(pct)
         self.ns_progress_bar.setFormat(f"{done}/{total} ({pct}%)")
 
-    def _ns_on_episode_status(self, movie: XSMovie, row: int, ep_num: int, status: str):
+    def _ns_on_episode_status(self, movie: XSMovie, row: int, ep_num: int, status: str, instance_id: int = 0,
+                               skip_instance_check: bool = False):
+        if not skip_instance_check and self.nsworker and self.nsworker.instance_id != instance_id:
+            return
+        # Find episode by number
+        ep = next((e for e in movie.episodes if e.episode == ep_num), None)
+        if ep is None:
+            return
+        # Skip updating if already done (prevents regressing status on re-add)
+        if status == "downloaded" and ep.status == "done":
+            self._log(f"[worker-{instance_id}] tập {ep_num} đã merge, bỏ qua.")
+            return
+        ep.status = status
         done_count = sum(1 for e in movie.episodes if e.selected and e.status == "done")
         total_sel = movie.selected_count
         self._ns_set_status(row, f"{status} ({done_count}/{total_sel})")
@@ -655,6 +840,7 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_start_btn.setEnabled(True)
         self.ns_stop_btn.setEnabled(False)
         self.ns_fetch_btn.setEnabled(True)
+        self._ns_update_all_row_btns()
 
     def _ns_remerge_movie(self, movie: XSMovie):
         if self.nsworker and self.nsworker.isRunning():
@@ -671,55 +857,102 @@ class XemShortTab(QtWidgets.QWidget):
                         pass
                 ep.merged_path = None
                 ep.status = "pending"
+                ep.error_msg = ""
                 reset += 1
         if reset == 0:
             QtWidgets.QMessageBox.information(self, "Re-merge",
                                               "Không có tập nào trạng thái 'done' để re-merge.")
             return
-        if movie in self.movies:
-            row = self.movies.index(movie)
+        row = self._ns_row_for_movie(movie)
+        if row >= 0:
             self._ns_set_status(row, "Ready")
         self._log(f"Re-merge '{movie.name}': reset {reset} tập, bắt đầu lại...")
         self._ns_on_start()
 
-    def _ns_on_movie_done(self, movie: XSMovie):
-        if movie not in self.movies:
-            return
-        row = self.movies.index(movie)
-        ok = sum(1 for e in movie.episodes if e.selected and e.status == "done")
-        total = movie.selected_count
-        self._ns_set_status(row, f"Done {ok}/{total}")
+    def _ns_on_movie_done(self, movie: XSMovie, iterator, instance_id: int):
+        # Always update row UI regardless of instance_id —
+        # this prevents "Running..." freeze when old worker finishes after new worker started.
+        row = self._ns_row_for_movie(movie)
+        if row >= 0:
+            self._ns_block_movie_btns(row, False)
+        self._ns_update_all_row_btns()
 
-        result_item = QtWidgets.QTableWidgetItem(self._ns_build_result_summary(movie))
-        self.ns_table.setItem(row, 4, result_item)
-        time_item = QtWidgets.QTableWidgetItem(self._ns_format_time_info(movie))
-        self.ns_table.setItem(row, 5, time_item)
-        self.ns_table.resizeRowsToContents()
-        self._ns_update_row_btns(movie)
+        if row >= 0:
+            ok = sum(1 for e in movie.episodes if e.selected and e.status == "done")
+            total = movie.selected_count
+            self._ns_set_status(row, f"Done {ok}/{total}")
+
+            result_item = QtWidgets.QTableWidgetItem(self._ns_build_result_summary(movie))
+            self.ns_table.setItem(row, 4, result_item)
+            time_item = QtWidgets.QTableWidgetItem(self._ns_format_time_info(movie))
+            self.ns_table.setItem(row, 5, time_item)
+            self.ns_table.resizeRowsToContents()
+            self._ns_update_row_btns(movie)
 
         if self._ns_iterator is None:
+            self._log(f"[worker-{instance_id}] iterator đã bị stop, không chạy tiếp.")
             return
-        iterator = self._ns_iterator
         self._ns_iterator = None
         self._ns_run_next_movie(iterator)
 
+    @staticmethod
+    def _fmt_ep_list(episodes: list, max_show: int = 12) -> str:
+        """Format a list of XSEpisode objects as 'T1, T2, T3 (+N nữa)'."""
+        srt = sorted(episodes, key=lambda e: e.episode)
+        names = [f"T{e.episode}" for e in srt[:max_show]]
+        suffix = f" (+{len(srt) - max_show} nữa)" if len(srt) > max_show else ""
+        return ", ".join(names) + suffix
+
     def _ns_build_result_summary(self, movie: XSMovie) -> str:
         sel = [e for e in movie.episodes if e.selected]
-        ok = sum(1 for e in sel if e.status == "done" and e.merge_note == "ok")
-        no_sub = sum(1 for e in sel if e.status == "done" and e.merge_note == "no_sub")
-        dur = sum(1 for e in sel if e.status == "done" and e.merge_note.startswith("dur:"))
-        err = sum(1 for e in sel if e.status == "error" or e.merge_note == "error")
-        parts = []
-        if ok:
-            parts.append(f"✅ {ok} OK")
-        if no_sub:
-            parts.append(f"⚠ {no_sub} thiếu sub")
-        if dur:
-            diffs = [e.merge_note for e in sel if e.merge_note.startswith("dur:")]
-            parts.append(f"⏱ {dur} lệch thời gian ({', '.join(diffs)})")
-        if err:
-            parts.append(f"❌ {err} lỗi")
-        return "\n".join(parts) if parts else "—"
+
+        # Phân loại theo kết quả merge
+        done_new   = [e for e in sel if e.status == "done"
+                      and e.merge_note not in ("", ) and not e.merge_note.startswith("skip:")]
+        done_skip  = [e for e in sel if e.status == "done" and e.merge_note.startswith("skip:")]
+        done_nosub = [e for e in sel if e.status == "done" and e.merge_note == "no_sub"]
+        done_dur   = [e for e in sel if e.status == "done" and e.merge_note.startswith("dur:")]
+        err_eps    = [e for e in sel if e.status == "error"]
+
+        total_success = len(done_new) + len(done_skip)
+        total_fail    = len(err_eps)
+
+        lines = []
+
+        # ── Dòng 1: tổng kết thành công / lỗi ──────────────────────────────
+        summary = []
+        if total_success:
+            summary.append(f"✅ {total_success} thành công")
+        if total_fail:
+            summary.append(f"❌ {total_fail} lỗi")
+        if summary:
+            lines.append("  ".join(summary))
+
+        # ── Dòng 2: tập nào merge mới / đã có sẵn ──────────────────────────
+        ep_detail = []
+        if done_new:
+            ep_detail.append(f"Merge mới: {self._fmt_ep_list(done_new)}")
+        if done_skip:
+            ep_detail.append(f"Đã có: {self._fmt_ep_list(done_skip)}")
+        if ep_detail:
+            lines.append(" | ".join(ep_detail))
+
+        # ── Dòng 3: cảnh báo chi tiết (thiếu sub, lệch duration, lỗi) ──────
+        warn = []
+        if done_nosub:
+            warn.append(f"⚠ thiếu sub: {self._fmt_ep_list(done_nosub)}")
+        if done_dur:
+            dur_info = ", ".join(
+                f"T{e.episode}({e.merge_note[4:]})"
+                for e in sorted(done_dur, key=lambda x: x.episode)
+            )
+            warn.append(f"⏱ lệch duration: {dur_info}")
+        if err_eps:
+            warn.append(f"❌ lỗi: {self._fmt_ep_list(err_eps)}")
+        if warn:
+            lines.append(" | ".join(warn))
+
+        return "\n".join(lines) if lines else "—"
 
     def _ns_format_time_info(self, movie: XSMovie) -> str:
         if not movie.start_time:
