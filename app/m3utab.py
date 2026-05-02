@@ -223,6 +223,12 @@ class M3U8Tab(QtWidgets.QWidget):
         btn.clicked.connect(self._on_add_clicked)
         lay.addWidget(btn)
 
+        btn_bulk = QtWidgets.QPushButton("📋 Thêm nhiều")
+        btn_bulk.setToolTip("Thêm nhiều video cùng lúc (mỗi dòng: Tên phim|URL)")
+        btn_bulk.setStyleSheet(_dark_btn("#7c3aed", "#6d28d9", padding="5px 12px"))
+        btn_bulk.clicked.connect(self._on_bulk_add_clicked)
+        lay.addWidget(btn_bulk)
+
         return grp
 
     def _build_table(self) -> QtWidgets.QTableWidget:
@@ -457,6 +463,195 @@ class M3U8Tab(QtWidgets.QWidget):
         self._add_url.clear()
         self._add_name.clear()
         self._add_url.setFocus()
+        self._save_settings()
+
+    def _on_bulk_add_clicked(self):
+        """Show a dialog to paste multiple items — one per line, format: Name|URL."""
+        save_dir = Path(self._cfg_save_dir.text().strip())
+        if not save_dir.name:
+            QtWidgets.QMessageBox.information(self, "Thiếu thư mục", "Vui lòng chọn thư mục lưu.")
+            return
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Thêm nhiều video")
+        dlg.setMinimumSize(720, 560)
+
+        lay = QtWidgets.QVBoxLayout(dlg)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(6)
+
+        # ── Header label with format hint ──────────────────────────────────
+        header = QtWidgets.QLabel(
+            "Dán danh sách video — mỗi dòng theo định dạng:  "
+            "<b><span style='color:#2563eb'>Tên phim</span>"
+            "<span style='color:#9ca3af'> | </span>"
+            "<span style='color:#16a34a'>https://...</span></b>"
+        )
+        header.setStyleSheet("font-size: 13px; padding: 2px 0;")
+        lay.addWidget(header)
+
+        # ── Text input ─────────────────────────────────────────────────────
+        text_edit = QtWidgets.QPlainTextEdit()
+        text_edit.setPlaceholderText(
+            "Phim hành động|https://cdn.example.com/ep1.m3u8\n"
+            "Phim tình cảm|https://cdn.example.com/ep2.m3u8\n"
+            "..."
+        )
+        text_edit.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #ffffff;
+                color: #111827;
+                border: 2px solid #3b82f6;
+                border-radius: 4px;
+                padding: 6px;
+                font-family: Consolas, monospace;
+                font-size: 12px;
+            }
+        """)
+        lay.addWidget(text_edit, stretch=1)
+
+        # ── Validation summary label ────────────────────────────────────────
+        lbl_summary = QtWidgets.QLabel("Chưa có dữ liệu")
+        lbl_summary.setStyleSheet("font-size: 12px; color: #6b7280; padding: 2px 0;")
+        lay.addWidget(lbl_summary)
+
+        # ── Validation detail panel (errors only, collapsible height) ──────
+        validation_log = QtWidgets.QTextEdit()
+        validation_log.setReadOnly(True)
+        validation_log.setMaximumHeight(110)
+        validation_log.setVisible(False)
+        validation_log.setStyleSheet("""
+            QTextEdit {
+                background-color: #fff7ed;
+                color: #92400e;
+                border: 1px solid #fcd34d;
+                border-radius: 4px;
+                font-family: Consolas, monospace;
+                font-size: 11px;
+                padding: 4px;
+            }
+        """)
+        lay.addWidget(validation_log)
+
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            | QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        btn_ok = btn_box.button(QtWidgets.QDialogButtonBox.StandardButton.Ok)
+        btn_ok.setText("Thêm")
+        btn_ok.setEnabled(False)
+        btn_box.button(QtWidgets.QDialogButtonBox.StandardButton.Cancel).setText("Hủy")
+        btn_box.accepted.connect(dlg.accept)
+        btn_box.rejected.connect(dlg.reject)
+        lay.addWidget(btn_box)
+
+        # ── Live validation ─────────────────────────────────────────────────
+        existing_names = {it.name.strip().lower() for it in self.items}
+
+        def _validate():
+            lines = text_edit.toPlainText().splitlines()
+            valid_count = 0
+            errors: list[str] = []
+
+            for i, raw in enumerate(lines, start=1):
+                line = raw.strip()
+                if not line:
+                    continue
+                parts = line.split("|", 1)
+                if len(parts) != 2:
+                    errors.append(
+                        f"Dòng {i}: <b>{line[:60]}</b>"
+                        f"  →  Thiếu ký tự <b>|</b> ngăn cách tên và URL"
+                    )
+                    continue
+                name, url = parts[0].strip(), parts[1].strip()
+                if not name and not url:
+                    errors.append(f"Dòng {i}: Cả tên và URL đều trống")
+                    continue
+                if not name:
+                    errors.append(f"Dòng {i}: <b>{url[:60]}</b>  →  Thiếu tên phim (phần trước <b>|</b>)")
+                    continue
+                if not url:
+                    errors.append(f"Dòng {i}: <b>{name}</b>  →  Thiếu URL (phần sau <b>|</b>)")
+                    continue
+                if name.lower() in existing_names:
+                    errors.append(
+                        f"Dòng {i}: <b>{name}</b>  →  Trùng tên với video đã có trong danh sách"
+                    )
+                    continue
+                valid_count += 1
+
+            # Update summary label
+            if valid_count == 0 and not errors:
+                lbl_summary.setText("Chưa có dữ liệu")
+                lbl_summary.setStyleSheet("font-size: 12px; color: #6b7280; padding: 2px 0;")
+            elif errors:
+                lbl_summary.setText(
+                    f"✅ <b>{valid_count}</b> dòng hợp lệ"
+                    + (f"   ❌ <b>{len(errors)}</b> dòng lỗi" if errors else "")
+                )
+                lbl_summary.setStyleSheet("font-size: 12px; color: #b91c1c; padding: 2px 0;")
+            else:
+                lbl_summary.setText(f"✅ <b>{valid_count}</b> dòng hợp lệ — sẵn sàng thêm")
+                lbl_summary.setStyleSheet("font-size: 12px; color: #16a34a; padding: 2px 0;")
+
+            # Update error panel
+            if errors:
+                validation_log.setHtml("<br>".join(errors))
+                validation_log.setVisible(True)
+            else:
+                validation_log.setVisible(False)
+
+            btn_ok.setEnabled(valid_count > 0)
+
+        text_edit.textChanged.connect(_validate)
+
+        if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return
+
+        save_dir.mkdir(parents=True, exist_ok=True)
+        fmt = self._add_fmt.currentText()
+        added = 0
+        skipped = 0
+
+        for line in text_edit.toPlainText().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split("|", 1)
+            if len(parts) != 2:
+                skipped += 1
+                continue
+            name, url = parts[0].strip(), parts[1].strip()
+            if not name or not url:
+                skipped += 1
+                continue
+            if any(it.name.strip().lower() == name.lower() for it in self.items):
+                skipped += 1
+                self._log(f"Bỏ qua (trùng tên): {name}")
+                continue
+
+            item = M3U8Item(
+                id=self._next_id,
+                url=url,
+                name=name,
+                save_dir=save_dir,
+                fmt=fmt,
+                status="pending",
+            )
+            self._next_id += 1
+            self.items.append(item)
+            row = self._table.rowCount()
+            self._table.insertRow(row)
+            self._row_for_id[item.id] = row
+            self._fill_row(row, item)
+            added += 1
+
+        self._update_count_label()
+        if added:
+            self._log(f"Đã thêm {added} video từ danh sách.")
+        if skipped:
+            self._log(f"Bỏ qua {skipped} dòng không hợp lệ hoặc trùng tên.")
         self._save_settings()
 
     def _derive_name_from_url(self, url: str) -> str:
