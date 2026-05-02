@@ -31,6 +31,7 @@ from utils import BIN_DIR, ROOT, ItemRoles, TreeColumn, load_toml, save_toml
 from worker import DownloadWorker
 from update_version import Updater
 from xemshort import XemShortTab
+from m3utab import M3U8Tab
 
 try:
     from _version import __version__
@@ -245,7 +246,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         xs_tab = XemShortTab()
         tab_widget.addTab(xs_tab, "XemShort")
 
-        # Tab 2: yt-dlp (original UI from setupUi)
+        # Tab 2: M3U8 Downloader
+        m3u8_tab = M3U8Tab()
+        tab_widget.addTab(m3u8_tab, "M3U8")
+
+        # Tab 3: yt-dlp (original UI from setupUi)
         yt_dlp_idx = tab_widget.addTab(self.centralwidget, "yt-dlp")
         tab_widget.tabBar().setTabVisible(yt_dlp_idx, False)  # hide yt-dlp tab
 
@@ -328,7 +333,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "- Copy Movie ID từ URL<br>"
             "- Dán Movie ID vào ô, nhấn Fetch Data<br>"
             "- Chọn tập, cấu hình merge phụ đề, nhấn Start<br><br>"
-            "<b>2. Chế độ yt-dlp:</b><br>"
+            "<b>2. Chế độ M3U8:</b><br>"
+            "- Nhập URL video M3U8, đặt tên (tùy chọn)<br>"
+            "- Chọn thư mục lưu, cấu hình số luồng và yt-dlp args<br>"
+            "- Nhấn Thêm để thêm vào danh sách<br>"
+            "- Nhấn Start All để tải nhiều video cùng lúc<br>"
+            "- Mỗi hàng có nút mở thư mục và xóa riêng<br><br>"
+            "<b>3. Chế độ yt-dlp:</b><br>"
             "- Nhập URL video vào ô trên<br>"
             "- Chọn preset (best/mp4/mp3) và thư mục lưu<br>"
             "- Nhấn Add để thêm vào queue, nhấn Download để tải<br><br>"
