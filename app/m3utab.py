@@ -34,7 +34,7 @@ def _dark_btn(
         f"QPushButton {{ background-color: {color}; color: {text}; "
         f"padding: {padding}; border-radius: 5px; font-weight: bold; border: none; }}"
         f"QPushButton:hover {{ background-color: {hover}; }}"
-        f"QPushButton:disabled {{ background-color: #374151; color: #6b7280; }}"
+        f"QPushButton:disabled {{ background-color: #e5e7eb; color: #9ca3af; }}"
     )
 
 
@@ -142,7 +142,7 @@ class M3U8Tab(QtWidgets.QWidget):
 
         btn_browse = QtWidgets.QPushButton("📁")
         btn_browse.setToolTip("Chọn thư mục")
-        btn_browse.setStyleSheet(_dark_btn("#374151", "#4b5563", padding="4px 10px"))
+        btn_browse.setStyleSheet(_dark_btn("#e5e7eb", "#d1d5db", text="#374151", padding="4px 10px"))
         btn_browse.clicked.connect(self._on_browse_save_dir)
         lay.addWidget(btn_browse)
 
@@ -257,13 +257,13 @@ class M3U8Tab(QtWidgets.QWidget):
 
     @staticmethod
     def _table_style() -> str:
-        """Return the complete dark theme stylesheet for the download queue table."""
+        """Return the complete light theme stylesheet for the download queue table."""
         return """
             QTableWidget {
-                background-color: #111827;
-                color: #f3f4f6;
-                gridline-color: #1f2937;
-                border: 1px solid #1f2937;
+                background-color: #ffffff;
+                color: #111827;
+                gridline-color: #e5e7eb;
+                border: 1px solid #d1d5db;
                 border-radius: 6px;
                 font-size: 12px;
             }
@@ -271,27 +271,27 @@ class M3U8Tab(QtWidgets.QWidget):
                 padding: 4px 6px;
             }
             QTableWidget::item:selected {
-                background-color: #1e3a5f;
-                color: #f3f4f6;
+                background-color: #dbeafe;
+                color: #1e40af;
             }
             QHeaderView::section {
-                background-color: #1f2937;
-                color: #d1d5db;
+                background-color: #f3f4f6;
+                color: #374151;
                 padding: 5px 8px;
                 border: none;
-                border-right: 1px solid #374151;
-                border-bottom: 1px solid #374151;
+                border-right: 1px solid #d1d5db;
+                border-bottom: 1px solid #d1d5db;
                 font-weight: bold;
                 font-size: 12px;
             }
             QScrollBar:vertical {
-                background: #111827;
+                background: #f3f4f6;
                 width: 8px;
             }
-            QScrollBar::handle:vertical { background: #374151; border-radius: 4px; }
+            QScrollBar::handle:vertical { background: #d1d5db; border-radius: 4px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-            QScrollBar:horizontal { background: #111827; height: 8px; }
-            QScrollBar::handle:horizontal { background: #374151; border-radius: 4px; }
+            QScrollBar:horizontal { background: #f3f4f6; height: 8px; }
+            QScrollBar::handle:horizontal { background: #d1d5db; border-radius: 4px; }
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
         """
 
@@ -328,11 +328,11 @@ class M3U8Tab(QtWidgets.QWidget):
         self._overall_pb.setFormat("Tổng: %p%")
         self._overall_pb.setStyleSheet("""
             QProgressBar {
-                background-color: #1f2937;
+                background-color: #e5e7eb;
                 border: none;
                 border-radius: 8px;
                 text-align: center;
-                color: #f3f4f6;
+                color: #374151;
                 font-size: 11px;
             }
             QProgressBar::chunk {
@@ -343,7 +343,7 @@ class M3U8Tab(QtWidgets.QWidget):
         lay.addWidget(self._overall_pb, stretch=1)
 
         self._lbl_count = QtWidgets.QLabel("0 video")
-        self._lbl_count.setStyleSheet("color: #9ca3af; font-size: 12px;")
+        self._lbl_count.setStyleSheet("color: #6b7280; font-size: 12px;")
         lay.addWidget(self._lbl_count)
 
         return w
@@ -359,9 +359,9 @@ class M3U8Tab(QtWidgets.QWidget):
         self._log_widget.setMaximumHeight(130)
         self._log_widget.setStyleSheet("""
             QTextEdit {
-                background-color: #0f1117;
-                color: #9ca3af;
-                border: 1px solid #1f2937;
+                background-color: #f8fafc;
+                color: #262727;
+                border: 1px solid #d1d5db;
                 border-radius: 4px;
                 font-family: Consolas, monospace;
                 font-size: 11px;
@@ -475,12 +475,12 @@ class M3U8Tab(QtWidgets.QWidget):
         """Populate (or refresh) all cells for a given row: name, URL, format, status, progress bar, speed, ETA, actions."""
         # Name
         name_item = QtWidgets.QTableWidgetItem(item.name)
-        name_item.setForeground(QtGui.QBrush(QtGui.QColor("#f3f4f6")))
+        name_item.setForeground(QtGui.QBrush(QtGui.QColor("#111827")))
         self._table.setItem(row, _COL_NAME, name_item)
 
         # URL
         url_item = QtWidgets.QTableWidgetItem(item.url)
-        url_item.setForeground(QtGui.QBrush(QtGui.QColor("#9ca3af")))
+        url_item.setForeground(QtGui.QBrush(QtGui.QColor("#6b7280")))
         url_item.setToolTip(item.url)
         self._table.setItem(row, _COL_URL, url_item)
 
@@ -504,12 +504,12 @@ class M3U8Tab(QtWidgets.QWidget):
 
         # Speed
         sp_item = QtWidgets.QTableWidgetItem(item.speed)
-        sp_item.setForeground(QtGui.QBrush(QtGui.QColor("#f97316")))
+        sp_item.setForeground(QtGui.QBrush(QtGui.QColor("#ea580c")))
         self._table.setItem(row, _COL_SPEED, sp_item)
 
         # ETA
         eta_item = QtWidgets.QTableWidgetItem(item.eta)
-        eta_item.setForeground(QtGui.QBrush(QtGui.QColor("#9ca3af")))
+        eta_item.setForeground(QtGui.QBrush(QtGui.QColor("#6b7280")))
         self._table.setItem(row, _COL_ETA, eta_item)
 
         # Actions
@@ -540,7 +540,7 @@ class M3U8Tab(QtWidgets.QWidget):
         btn_folder = QtWidgets.QPushButton("📁")
         btn_folder.setFixedSize(28, 24)
         btn_folder.setToolTip("Mở thư mục")
-        btn_folder.setStyleSheet(_dark_btn("#374151", "#4b5563", padding="2px"))
+        btn_folder.setStyleSheet(_dark_btn("#e5e7eb", "#d1d5db", text="#374151", padding="2px"))
         btn_folder.clicked.connect(lambda *_, it=item: self._open_item_folder(it))
         lay.addWidget(btn_folder)
 
@@ -557,7 +557,7 @@ class M3U8Tab(QtWidgets.QWidget):
             btn_del = QtWidgets.QPushButton("🗑")
             btn_del.setFixedSize(28, 24)
             btn_del.setToolTip("Xóa")
-            btn_del.setStyleSheet(_dark_btn("#374151", "#7f1d1d", padding="2px"))
+            btn_del.setStyleSheet(_dark_btn("#fee2e2", "#fca5a5", text="#b91c1c", padding="2px"))
             btn_del.clicked.connect(lambda *_, it=item: self._delete_item(it))
             lay.addWidget(btn_del)
 
@@ -574,7 +574,7 @@ class M3U8Tab(QtWidgets.QWidget):
             btn_del = QtWidgets.QPushButton("🗑")
             btn_del.setFixedSize(28, 24)
             btn_del.setToolTip("Xóa")
-            btn_del.setStyleSheet(_dark_btn("#374151", "#7f1d1d", padding="2px"))
+            btn_del.setStyleSheet(_dark_btn("#fee2e2", "#fca5a5", text="#b91c1c", padding="2px"))
             btn_del.clicked.connect(lambda *_, it=item: self._delete_item(it))
             lay.addWidget(btn_del)
 
@@ -584,7 +584,7 @@ class M3U8Tab(QtWidgets.QWidget):
                 btn_copy = QtWidgets.QPushButton("📋")
                 btn_copy.setFixedSize(28, 24)
                 btn_copy.setToolTip("Copy path")
-                btn_copy.setStyleSheet(_dark_btn("#374151", "#4b5563", padding="2px"))
+                btn_copy.setStyleSheet(_dark_btn("#e5e7eb", "#d1d5db", text="#374151", padding="2px"))
                 btn_copy.clicked.connect(lambda *_, it=item: self._copy_item_path(it))
                 lay.addWidget(btn_copy)
 
@@ -600,7 +600,7 @@ class M3U8Tab(QtWidgets.QWidget):
             btn_del = QtWidgets.QPushButton("🗑")
             btn_del.setFixedSize(28, 24)
             btn_del.setToolTip("Xóa")
-            btn_del.setStyleSheet(_dark_btn("#374151", "#7f1d1d", padding="2px"))
+            btn_del.setStyleSheet(_dark_btn("#fee2e2", "#fca5a5", text="#b91c1c", padding="2px"))
             btn_del.clicked.connect(lambda *_, it=item: self._delete_item(it))
             lay.addWidget(btn_del)
 
@@ -619,7 +619,7 @@ class M3U8Tab(QtWidgets.QWidget):
     def _pb_style(status: str) -> str:
         """Return a per-status colored stylesheet for a download progress bar."""
         base = (
-            "QProgressBar { background-color: #1f2937; border: none; border-radius: 5px; "
+            "QProgressBar { background-color: #e5e7eb; border: none; border-radius: 5px; "
             "text-align: center; }"
         )
         colors = {
@@ -687,7 +687,6 @@ class M3U8Tab(QtWidgets.QWidget):
         if item.id in self.workers:
             w = self.workers[item.id]
             w.stop()
-            w.quit()
             w.quit()
             w.wait(5000)  # max 5s
             del self.workers[item.id]
@@ -895,7 +894,7 @@ class M3U8Tab(QtWidgets.QWidget):
 
         # Auto-start next pending item up to concurrency limit
         if self._batch_total > 0:
-            self._batch_remaining -= 1
+            self._batch_remaining = max(0, self._batch_remaining - 1)
             running = sum(1 for it in self.items if it.status == "downloading")
             concurrency = self._cfg_concurrency.value()
             if running < concurrency:
@@ -941,7 +940,7 @@ class M3U8Tab(QtWidgets.QWidget):
             return  # auto-start still pending, wait
 
         success_count = sum(1 for it in self.items if it.status == "done")
-        fail_count = len(self.items) - success_count
+        fail_count = sum(1 for it in self.items if it.status == "error")
         if fail_count == 0:
             msg = f"Hoàn thành! {success_count} video đã tải xong."
         else:

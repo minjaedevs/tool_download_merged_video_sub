@@ -333,7 +333,7 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_log_text = QtWidgets.QTextEdit()
         self.ns_log_text.setReadOnly(True)
         self.ns_log_text.setFont(QtGui.QFont("Consolas", 9))
-        self.ns_log_text.setStyleSheet("background:#1a1a2e;color:#00ff00;")
+        self.ns_log_text.setStyleSheet("background:#f8fafc;color:#262727;")
         log_lay.addWidget(self.ns_log_text)
         splitter.addWidget(log_w)
         splitter.setStretchFactor(0, 2)

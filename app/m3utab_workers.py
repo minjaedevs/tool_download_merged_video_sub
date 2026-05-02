@@ -98,6 +98,48 @@ class M3U8DownloadWorker(QtCore.QThread):
         found = shutil.which("ffmpeg")
         return Path(found) if found else None
 
+    def _get_ffprobe_path(self) -> Optional[Path]:
+        """Locate ffprobe alongside ffmpeg."""
+        for fname in ("ffprobe", "ffprobe.exe"):
+            candidate = Path(sys.executable).parent / fname
+            if candidate.exists():
+                return candidate
+        found = shutil.which("ffprobe")
+        return Path(found) if found else None
+
+    def _probe_duration_ms(self) -> int:
+        """Return total duration in ms via ffprobe; 0 if unknown or on error.
+
+        Used to calculate percentage progress for HLS/M3U8 downloads.
+        ffprobe fetches the playlist and sums segment durations, so this works
+        for both VOD and (partially) for live streams.
+        """
+        ffprobe = self._get_ffprobe_path()
+        if not ffprobe:
+            return 0
+        _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+        try:
+            result = sp.run(
+                [
+                    str(ffprobe),
+                    "-v", "quiet",
+                    "-show_entries", "format=duration",
+                    "-of", "csv=p=0",
+                    self.url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                **_cflags,
+            )
+            if result.returncode == 0:
+                raw = result.stdout.strip()
+                if raw and raw != "N/A":
+                    return int(float(raw) * 1000)
+        except Exception:
+            pass
+        return 0
+
     @staticmethod
     def _find_output_video(base_dir: Path, instance_id: int, title: str = "") -> Optional[Path]:
         """Fallback glob search — used by m3utab.py if output_ready was not emitted."""
@@ -253,15 +295,31 @@ class M3U8DownloadWorker(QtCore.QThread):
 
         cmd = [
             str(ffmpeg_path), "-y",
+            "-loglevel", "warning",        # global — before first -i
+            "-progress", "pipe:1",         # global — write progress to stdout
             "-headers", f"Referer: {referer}",
             "-i", self.url,
             "-c", "copy",
+            "-bsf:a", "aac_adtstoasc",     # fix AAC-ADTS → MP4 AAC (correct audio duration)
+            "-avoid_negative_ts", "make_zero",  # normalise HLS PTS to start at 0
+            "-movflags", "+faststart",     # write moov at start → seekable output
             "-f", "mp4",
-            "-progress", "pipe:1",
-            "-loglevel", "warning",
             str(out_path),
         ]
         self.log_msg.emit(iid, f"ffmpeg: {ffmpeg_path.name}  {self.url[:60]}...")
+
+        # Probe duration BEFORE starting ffmpeg so the stdout pipe is never left
+        # unread while we block — avoids the 4 KiB Windows pipe-buffer deadlock.
+        self.log_msg.emit(iid, "Đang lấy thông tin video...")
+        total_duration_ms = self._probe_duration_ms()
+        if total_duration_ms > 0:
+            total_s = total_duration_ms // 1000
+            self.log_msg.emit(iid, f"Thời lượng: {total_s // 60}:{total_s % 60:02d}")
+        else:
+            self.log_msg.emit(iid, "Không xác định thời lượng — hiển thị thời gian thực")
+
+        if self._is_aborted():
+            return False, "Stopped by user"
 
         proc: Optional[sp.Popen] = None
         try:
@@ -273,9 +331,9 @@ class M3U8DownloadWorker(QtCore.QThread):
                 **_cflags,
             )
 
-            total_duration_ms = 0
-            downloaded_ms = 0
+            out_time_ms = 0
             last_size_kb = 0
+            last_speed_x = 1.0    # realtime multiplier from ffmpeg  speed=Nx
 
             # Drain stderr in a separate thread to avoid deadlock
             import threading
@@ -310,17 +368,10 @@ class M3U8DownloadWorker(QtCore.QThread):
                 key = key.strip()
                 val = val.strip()
 
-                if key == "duration":
-                    parts = val.split(":")
-                    if len(parts) == 3:
-                        h, m, s = parts
-                        try:
-                            total_duration_ms = (float(h) * 3600 + float(m) * 60 + float(s)) * 1000
-                        except ValueError:
-                            pass
-                elif key == "out_time_ms":
+                if key == "out_time_ms":
+                    # NOTE: ffmpeg names this out_time_ms but the unit is microseconds
                     try:
-                        downloaded_ms = int(val) // 1000
+                        out_time_ms = int(val) // 1000   # µs → ms
                     except ValueError:
                         pass
                 elif key == "total_size":
@@ -328,10 +379,26 @@ class M3U8DownloadWorker(QtCore.QThread):
                         last_size_kb = int(val) // 1024
                     except ValueError:
                         pass
+                elif key == "speed":
+                    # "2.00x" → 2.0
+                    try:
+                        last_speed_x = float(val.rstrip("x")) if val not in ("N/A", "0x") else 1.0
+                    except ValueError:
+                        pass
 
-                if total_duration_ms > 0 and downloaded_ms > 0:
-                    pct = min(downloaded_ms / total_duration_ms * 100, 99.9)
-                    self.progress.emit(iid, "downloading", pct, f"{last_size_kb} KiB", "", "")
+                if out_time_ms > 0:
+                    size_str = f"{last_size_kb} KiB"
+                    if total_duration_ms > 0:
+                        pct = min(out_time_ms / total_duration_ms * 100, 99.9)
+                        remaining_ms = total_duration_ms - out_time_ms
+                        eta_s = int(remaining_ms / max(last_speed_x, 0.01) / 1000)
+                        eta_str = f"{eta_s // 60}:{eta_s % 60:02d}"
+                        self.progress.emit(iid, "downloading", pct, size_str, eta_str, "")
+                    else:
+                        # Unknown total — show elapsed in ETA column
+                        elapsed_s = out_time_ms // 1000
+                        eta_str = f"{elapsed_s // 60}:{elapsed_s % 60:02d}"
+                        self.progress.emit(iid, "downloading", 0.0, size_str, eta_str, "")
 
             ret = proc.wait()
 
