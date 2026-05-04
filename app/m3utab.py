@@ -1,4 +1,4 @@
-"""M3U8 Download Tab — pure-M3U8 downloader using yt-dlp, running multiple concurrent workers."""
+"""M3U8 Download Tab — pure-M3U8 downloader using ffmpeg, running multiple concurrent workers."""
 from __future__ import annotations
 
 import logging
@@ -75,7 +75,7 @@ _NUM_COLS = 8
 
 class M3U8Tab(QtWidgets.QWidget):
     """
-    Standalone tab widget for downloading M3U8 (and any yt-dlp-supported) URLs.
+    Standalone tab widget for downloading M3U8 URLs.
 
     User flow
     ─────────
@@ -128,7 +128,7 @@ class M3U8Tab(QtWidgets.QWidget):
         root.addWidget(self._build_log_panel(), stretch=0)
 
     def _build_config_bar(self) -> QtWidgets.QWidget:
-        """Save directory, concurrency, and yt-dlp args inputs."""
+        """Save directory and concurrency inputs."""
         grp = QtWidgets.QGroupBox("Cấu hình")
         lay = QtWidgets.QHBoxLayout(grp)
         lay.setContentsMargins(8, 6, 8, 6)
@@ -159,16 +159,6 @@ class M3U8Tab(QtWidgets.QWidget):
         )
         self._cfg_concurrency.setToolTip("Số lượng video tải đồng thời")
         lay.addWidget(self._cfg_concurrency)
-
-        lay.addSpacing(10)
-
-        lay.addWidget(QtWidgets.QLabel("yt-dlp args:"))
-        self._cfg_ytdlp_args = QtWidgets.QLineEdit()
-        self._cfg_ytdlp_args.setPlaceholderText("--no-playlist -f best")
-        self._cfg_ytdlp_args.setStyleSheet(_dark_input())
-        self._cfg_ytdlp_args.setMinimumWidth(200)
-        self._cfg_ytdlp_args.setToolTip("Thêm tham số yt-dlp tùy chỉnh (ví dụ: -f best, --no-playlist)")
-        lay.addWidget(self._cfg_ytdlp_args, stretch=0)
 
         return grp
 
@@ -384,18 +374,16 @@ class M3U8Tab(QtWidgets.QWidget):
         return QtCore.QSettings(_APP_NAME, _CONFIG_KEY)
 
     def _load_settings(self):
-        """Load persisted save_dir, concurrency, and yt-dlp args from QSettings."""
+        """Load persisted save_dir and concurrency from QSettings."""
         s = self.settings()
         self._cfg_save_dir.setText(s.value("save_dir", ""))
         self._cfg_concurrency.setValue(int(s.value("concurrency", 3)))
-        self._cfg_ytdlp_args.setText(s.value("ytdlp_args", ""))
 
     def _save_settings(self):
-        """Persist save_dir, concurrency, and yt-dlp args to QSettings."""
+        """Persist save_dir and concurrency to QSettings."""
         s = self.settings()
         s.setValue("save_dir", self._cfg_save_dir.text())
         s.setValue("concurrency", self._cfg_concurrency.value())
-        s.setValue("ytdlp_args", self._cfg_ytdlp_args.text())
 
     # ------------------------------------------------------------------ Actions
     def _on_browse_save_dir(self):
@@ -852,7 +840,6 @@ class M3U8Tab(QtWidgets.QWidget):
             save_dir=item.save_dir,
             name=item.name,
             fmt=item.fmt,
-            ytdlp_args=self._cfg_ytdlp_args.text(),
         )
         item.instance_id = worker.instance_id
         self.workers[item.id] = worker

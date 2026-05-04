@@ -23,24 +23,20 @@ BINARIES = {
     "Linux": {
         "ffmpeg": "ffmpeg-linux64-v4.1",
         "ffprobe": "ffprobe-linux64-v4.1",
-        "yt-dlp": "yt-dlp_linux",
         "deno": "deno-x86_64-unknown-linux-gnu.zip",
     },
     "Darwin": {
         "ffmpeg": "ffmpeg-osx64-v4.1",
         "ffprobe": "ffprobe-osx64-v4.1",
-        "yt-dlp": "yt-dlp_macos",
         "deno": "deno-x86_64-apple-darwin.zip",
     },
     "Windows": {
         "ffmpeg": "ffmpeg-win64-v4.1.exe",
         "ffprobe": "ffprobe-win64-v4.1.exe",
-        "yt-dlp": "yt-dlp.exe",
         "deno": "deno-x86_64-pc-windows-msvc.zip",
     },
 }
 
-YT_DLP_BASE_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/"
 FFMPEG_BASE_URL = "https://github.com/imageio/imageio-binaries/raw/183aef992339cc5a463528c75dd298db15fd346f/ffmpeg/"
 DENO_BASE_URL = "https://github.com/denoland/deno/releases/latest/download/"
 
@@ -48,17 +44,16 @@ DENO_BASE_URL = "https://github.com/denoland/deno/releases/latest/download/"
 class DepWorker(QThread):
     progress = Signal(str)
 
-    def __init__(self, update_ytdlp: bool):
+    def __init__(self):
         super().__init__()
         self.missing: List[Tuple[str, str]] = []
-        self.update_ytdlp = update_ytdlp
 
     def _check_missing_dependencies(self):
         system_os = platform.system()
         if system_os not in BINARIES:
             return
 
-        required_binaries = ["ffmpeg", "ffprobe", "yt-dlp", "deno"]
+        required_binaries = ["ffmpeg", "ffprobe", "deno"]
         missing_exes = [
             exe
             for exe in required_binaries
@@ -76,9 +71,7 @@ class DepWorker(QThread):
         for exe in missing_exes:
             binary_name = BINARIES[system_os][exe]
 
-            if exe == "yt-dlp":
-                url = YT_DLP_BASE_URL + binary_name
-            elif exe == "deno":
+            if exe == "deno":
                 url = DENO_BASE_URL + binary_name
             else:
                 url = FFMPEG_BASE_URL + binary_name
@@ -104,35 +97,7 @@ class DepWorker(QThread):
                 self._download()
                 self.chmod()
 
-        if self.update_ytdlp:
-            self.update()
-
         self.finished.emit()
-
-    def update(self):
-        create_window = sp.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-        output = ""
-        updated = False
-
-        with sp.Popen(
-            ["yt-dlp", "-U"],
-            stdout=sp.PIPE,
-            stderr=sp.STDOUT,
-            text=True,
-            universal_newlines=True,
-            creationflags=create_window,
-        ) as p:
-            for line in p.stdout:
-                output += line
-                if line.startswith("Updating to"):
-                    updated = True
-                    self.progress.emit("Updating yt-dlp...")
-
-        if p.returncode != 0:
-            logger.error(f"yt-dlp update failed returncode: {p.returncode}\n{output}")
-        elif updated:
-            self.progress.emit("yt-dlp updated")
-            logger.info(f"yt-dlp updated\n{output}")
 
     def _download(self):
         response = requests.get(self.url, stream=True)

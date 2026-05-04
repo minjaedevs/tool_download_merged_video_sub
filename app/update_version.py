@@ -275,7 +275,8 @@ class Updater(QObject):
           1. Write a .bat script to a temp directory.
           2. The bat waits 2 s then retries moving the new exe over the current
              one (up to 30 attempts, 1 s apart) until the file lock is released.
-          3. Launch the bat detached and close the current app.
+          3. Show a notification dialog asking the user to reopen the app manually.
+          4. User clicks OK → app closes, bat runs in background and replaces the exe.
         """
         current_exe = _get_current_exe()
         bat_path = Path(tempfile.gettempdir()) / "yt-dlp-gui-update.bat"
@@ -290,14 +291,13 @@ class Updater(QObject):
             f'move /y "{new_exe}" "{current_exe}" >nul 2>&1\n'
             'if errorlevel 1 (\n'
             '    set /a retries+=1\n'
-            '    if %retries% geq 30 goto failed\n'
+            '    if %retries% geq 10 goto failed\n'
             '    timeout /t 1 /nobreak >nul\n'
             '    goto retry\n'
             ')\n'
-            f'start "" "{current_exe}"\n'
             'goto cleanup\n'
             ':failed\n'
-            f'echo Failed to replace executable after 30 retries. New version is at: "{new_exe}"\n'
+            f'echo Failed to replace executable after 10 retries. New version is at: "{new_exe}"\n'
             'pause\n'
             ':cleanup\n'
             'del "%~f0"\n'
@@ -329,4 +329,11 @@ class Updater(QObject):
             )
             return
 
+        QMessageBox.information(
+            self.parent,
+            "Cài đặt cập nhật",
+            f"Bản cập nhật đã được tải về và đang được cài đặt.\n\n"
+            f"Nhấn OK để đóng ứng dụng.\n"
+            f"Vui lòng mở lại ứng dụng sau khi cài đặt hoàn tất."
+        )
         self.parent.close()

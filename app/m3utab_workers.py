@@ -51,7 +51,6 @@ class M3U8DownloadWorker(QtCore.QThread):
         save_dir: Path,
         name: str,
         fmt: str = "mp4",
-        ytdlp_args: str = "",   # kept for API compatibility, unused
     ):
         super().__init__()
         self.url = url
@@ -62,7 +61,6 @@ class M3U8DownloadWorker(QtCore.QThread):
         self.instance_id: int = uuid.uuid4().int & 0x7FFFFFFF
         self._mutex = QtCore.QMutex()
         self._aborted = False
-        # ytdlp_args kept in signature for API compatibility, not used in this flow
 
     # ------------------------------------------------------------------ stop
     def stop(self):
