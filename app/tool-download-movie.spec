@@ -1,12 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
 
 datas = [('assets', 'assets'), ('root', 'root')]
 binaries = []
-hiddenimports = ['httpx', 'anyio', 'charset_normalizer', 'certifi', 'platformdirs', 'httpx_sse']
-tmp_ret = collect_all('qtawesome')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-
+hiddenimports = [
+    'requests',
+    'tomlkit',
+    'charset_normalizer',
+    'certifi',
+    'platformdirs',
+]
 
 a = Analysis(
     ['app.py'],

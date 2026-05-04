@@ -14,7 +14,6 @@ from .models import XSEpisode, XSMovie
 from .helpers import (
     _ns_analyze_vtt,
     _ns_get_video_duration,
-    _ns_get_video_duration_secs,
 )
 
 
@@ -156,10 +155,10 @@ class XSDetailDialog(QtWidgets.QDialog):
 
         layout = QtWidgets.QVBoxLayout(self)
 
-        header = QtWidgets.QLabel(
+        self.header = QtWidgets.QLabel(
             f"<b>{movie.name}</b> — {movie.selected_count}/{movie.total} tập được chọn"
         )
-        layout.addWidget(header)
+        layout.addWidget(self.header)
 
         self.table = QtWidgets.QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(
@@ -200,11 +199,34 @@ class XSDetailDialog(QtWidgets.QDialog):
         QtCore.QTimer.singleShot(0, self._resize_rows)
 
     def _populate(self):
-        """Fill table rows for each episode."""
+        """Fill table rows for each episode and update header with completion summary."""
+        done_eps = []
+        fail_eps = []
         for ep in self.movie.episodes:
             if not ep.selected:
                 continue
             self._add_episode_row(ep)
+            if ep.merged_path and ep.merged_path.exists():
+                done_eps.append(ep.episode)
+            elif ep.status == "error":
+                fail_eps.append(ep.episode)
+
+        total = self.movie.selected_count
+        if fail_eps:
+            fail_str = ", ".join(f"Tập {n}" for n in fail_eps)
+            self.header.setText(
+                f"<b>{self.movie.name}</b> — {len(done_eps)}/{total} tập"
+                f" &nbsp;|&nbsp; <span style='color:#ef4444'>⚠ Lỗi: {fail_str}</span>"
+            )
+        elif done_eps and len(done_eps) == total:
+            self.header.setText(
+                f"<b>{self.movie.name}</b> — {total}/{total} tập"
+                f" &nbsp;|&nbsp; <span style='color:#16a34a'>✅ Hoàn tất</span>"
+            )
+        else:
+            self.header.setText(
+                f"<b>{self.movie.name}</b> — {self.movie.selected_count}/{self.movie.total} tập được chọn"
+            )
 
     def _resize_rows(self):
         """Resize table rows to fit wrapped content after the table is shown."""
@@ -346,31 +368,31 @@ class XSDetailDialog(QtWidgets.QDialog):
             merged_secs = to_secs(merged_dur)
 
         lines = [
-            f"Video goc : {orig_dur or '—'}",
+            f"Video gốc   : {orig_dur or '—'}",
             f"Video merged: {merged_dur or '—'}",
         ]
 
         if orig_secs is not None and merged_secs is not None:
             diff = merged_secs - orig_secs
             sign = "+" if diff >= 0 else ""
-            lines.append(f"Chenh lech : {sign}{diff}s")
+            lines.append(f"Chênh lệch  : {sign}{diff}s")
             if abs(diff) <= 2:
-                lines.append("✅ OK — thoi luong khop (<=2s)")
+                lines.append("✅ OK — thời lượng khớp (<=2s)")
                 icon = QtWidgets.QMessageBox.Information
             else:
-                lines.append(f"⚠ Chenh lech {abs(diff)}s — kiem tra lai!")
+                lines.append(f"⚠ Chênh lệch {abs(diff)}s — kiểm tra lại!")
                 icon = QtWidgets.QMessageBox.Warning
         elif not orig_dur:
-            lines.append("⚠ Khong doc duoc video goc")
+            lines.append("⚠ Không đọc được video gốc")
             icon = QtWidgets.QMessageBox.Warning
         elif not merged_dur:
-            lines.append("⚠ Khong doc duoc video merged")
+            lines.append("⚠ Không đọc được video merged")
             icon = QtWidgets.QMessageBox.Warning
         else:
             icon = QtWidgets.QMessageBox.Question
 
         msg = QtWidgets.QMessageBox(self)
-        msg.setWindowTitle(f"Kiem tra - Tap {ep.episode}")
+        msg.setWindowTitle(f"Kiểm tra - Tập {ep.episode}")
         msg.setIcon(icon)
         msg.setText("\n".join(lines))
         msg.exec()

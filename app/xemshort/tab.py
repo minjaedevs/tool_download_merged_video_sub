@@ -64,7 +64,8 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_concurrency_spin.setValue(int(s.value("concurrency", 4)))
         self.ns_sub_checkbox.setChecked(s.value("download_sub", True, type=bool))
         self.ns_merge_checkbox.setChecked(s.value("do_merge", True, type=bool))
-        self.ns_crf_spin.setValue(int(s.value("crf", 22)))
+        self.ns_crf_spin.setValue(int(s.value("crf", 26)))
+        self.ns_encode_threads_spin.setValue(int(s.value("encode_threads", 4)))
         self.ns_sub_font_combo.setCurrentText(s.value("sub_font", "UTM Alter Gothic"))
         self.ns_sub_size_spin.setValue(int(s.value("sub_size", 20)))
         self.ns_sub_margin_v_spin.setValue(int(s.value("sub_margin_v", 30)))
@@ -80,6 +81,7 @@ class XemShortTab(QtWidgets.QWidget):
         s.setValue("download_sub", self.ns_sub_checkbox.isChecked())
         s.setValue("do_merge", self.ns_merge_checkbox.isChecked())
         s.setValue("crf", self.ns_crf_spin.value())
+        s.setValue("encode_threads", self.ns_encode_threads_spin.value())
         s.setValue("sub_font", self.ns_sub_font_combo.currentText())
         s.setValue("sub_size", self.ns_sub_size_spin.value())
         s.setValue("sub_margin_v", self.ns_sub_margin_v_spin.value())
@@ -131,10 +133,20 @@ class XemShortTab(QtWidgets.QWidget):
         opts.addSpacing(10)
         opts.addWidget(QtWidgets.QLabel("CRF:"))
         self.ns_crf_spin = QtWidgets.QSpinBox()
-        self.ns_crf_spin.setRange(18, 28)
-        self.ns_crf_spin.setValue(22)
-        self.ns_crf_spin.setToolTip("CRF: 18=chất lượng cao, 28=nhỏ hơn")
+        self.ns_crf_spin.setRange(18, 32)
+        self.ns_crf_spin.setValue(26)
+        self.ns_crf_spin.setToolTip("CRF: 18=chất lượng cao/file lớn, 26=cân bằng (khuyến nghị), 32=file nhỏ")
         opts.addWidget(self.ns_crf_spin)
+        opts.addSpacing(10)
+        opts.addWidget(QtWidgets.QLabel("Threads encode:"))
+        self.ns_encode_threads_spin = QtWidgets.QSpinBox()
+        self.ns_encode_threads_spin.setRange(1, 32)
+        self.ns_encode_threads_spin.setValue(4)
+        self.ns_encode_threads_spin.setToolTip(
+            "Số threads dành cho encode video (x264/GPU).\n"
+            "Thấp hơn = ít CPU hơn nhưng encode chậm hơn.\n"
+            "Mặc định 4 để cân bằng CPU.")
+        opts.addWidget(self.ns_encode_threads_spin)
         opts.addStretch()
         cfg_layout.addRow("Tùy chọn:", opts)
 
@@ -785,6 +797,7 @@ class XemShortTab(QtWidgets.QWidget):
             do_merge=self.ns_merge_checkbox.isChecked(),
             crf=self.ns_crf_spin.value(),
             preset="fast",
+            encode_threads=self.ns_encode_threads_spin.value(),
             sub_font=self.ns_sub_font_combo.currentText(),
             sub_size=self.ns_sub_size_spin.value(),
             sub_margin_v=self.ns_sub_margin_v_spin.value(),

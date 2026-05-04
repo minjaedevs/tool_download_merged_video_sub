@@ -116,7 +116,7 @@ class DownloadWorker(QThread):
             r.raise_for_status()
             total = int(r.headers.get("content-length", 0))
 
-            tmp = Path(tempfile.gettempdir()) / "yt-dlp-gui-update.exe"
+            tmp = Path(tempfile.gettempdir()) / "tool-download-movie-update.exe"
             done = 0
             with open(tmp, "wb") as f:
                 for chunk in r.iter_content(65536):
@@ -279,7 +279,7 @@ class Updater(QObject):
           4. User clicks OK → app closes, bat runs in background and replaces the exe.
         """
         current_exe = _get_current_exe()
-        bat_path = Path(tempfile.gettempdir()) / "yt-dlp-gui-update.bat"
+        bat_path = Path(tempfile.gettempdir()) / "tool-download-movie-update.bat"
         new_exe = Path(new_exe_path)
 
         bat_content = (

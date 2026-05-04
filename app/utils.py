@@ -10,7 +10,7 @@ else:
     ROOT = Path(__file__).parent
 
 # BIN_DIR: persistent user data (config, logs) - works in both dev and frozen modes
-BIN_DIR = Path(user_data_dir("yt-dlp-gui"))
+BIN_DIR = Path(user_data_dir("Tool Download Movie"))
 
 
 def load_toml(path):

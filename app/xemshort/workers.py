@@ -1,7 +1,9 @@
 """XemShort background worker threads: XSFetchWorker, XSDownloadMergeWorker."""
 from __future__ import annotations
 
+import functools
 import json
+import os
 import shutil
 import sys
 import time
@@ -45,6 +47,56 @@ NETSHORT_API_HEADERS = {
 }
 
 _MERGE_SIDECAR_FILE = ".merge_settings.json"
+
+# ── GPU encoder detection ─────────────────────────────────────────────────────
+
+_GPU_ENCODER_CANDIDATES = [
+    # (encoder_name, keyword_in_ffmpeg_encoders_output, quality_param_fn(crf))
+    ("h264_nvenc", "nvenc", lambda crf: ["-preset", "p4", "-rc", "vbr", "-cq", str(crf)]),
+    ("h264_amf",   "amf",   lambda crf: ["-quality", "balanced", "-qp_i", str(crf), "-qp_p", str(min(crf + 2, 51))]),
+    ("h264_qsv",   "qsv",   lambda crf: ["-preset", "fast", "-global_quality", str(crf)]),
+]
+
+
+@functools.lru_cache(maxsize=1)
+def _detect_video_encoder(ffmpeg_path: str) -> str:
+    """
+    Probe available H.264 encoders; return the first working GPU encoder.
+    Cached with lru_cache — runs only once per process lifetime.
+    Falls back to 'libx264' if no GPU encoder is available or functional.
+    """
+    import subprocess as _sp
+    _cflags = {"creationflags": _sp.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+    try:
+        enc_list = _sp.run(
+            [ffmpeg_path, "-encoders", "-v", "quiet"],
+            capture_output=True, text=True, timeout=8, **_cflags,
+        )
+        for enc_name, keyword, _ in _GPU_ENCODER_CANDIDATES:
+            if keyword not in enc_list.stdout:
+                continue
+            # Sanity-check: actually encode 1 frame to /dev/null
+            probe = _sp.run(
+                [ffmpeg_path,
+                 "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.04:r=1",
+                 "-c:v", enc_name, "-frames:v", "1",
+                 "-f", "null", "-"],
+                capture_output=True, timeout=10, **_cflags,
+            )
+            if probe.returncode == 0:
+                return enc_name
+    except Exception:
+        pass
+    return "libx264"
+
+
+def _encoder_quality_params(encoder_name: str, crf: int, cpu_preset: str) -> list[str]:
+    """Return encoder-specific quality/speed parameters."""
+    for name, _, param_fn in _GPU_ENCODER_CANDIDATES:
+        if name == encoder_name:
+            return param_fn(crf)
+    # libx264 CPU fallback
+    return ["-preset", cpu_preset, "-crf", str(crf)]
 
 
 def _load_merge_sidecar(merge_dir: Path) -> dict:
@@ -172,7 +224,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
     finished_all   = QtCore.Signal(int)              # instance_id
 
     def __init__(self, movie: XSMovie, concurrency: int, download_sub: bool,
-                 do_merge: bool, crf: int, preset: str,
+                 do_merge: bool, crf: int, preset: str, encode_threads: int = 4,
                  sub_font: str = "UTM Alter Gothic", sub_size: int = 20,
                  sub_margin_v: int = 30, sub_color: str = "Trắng",
                  sub_bold: bool = True, sub_italic: bool = False):
@@ -184,6 +236,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
         self.do_merge = do_merge
         self.crf = crf
         self.ffpreset = preset
+        self.encode_threads = max(1, encode_threads)
         self.sub_font = sub_font
         self.sub_size = sub_size
         self.sub_margin_v = sub_margin_v
@@ -416,22 +469,36 @@ class XSDownloadMergeWorker(QtCore.QThread):
         orig_secs = _ns_get_video_duration_secs(ep.video_path)
 
         import subprocess as sp
+        import platform as _platform
+        # Detect best encoder once (cached); use configured encode_threads
+        encoder_name = _detect_video_encoder(str(ffmpeg_path))
+        encoder_params = _encoder_quality_params(encoder_name, self.crf, self.ffpreset)
+        _cpu_threads = self.encode_threads
+        self.log(f"tập {ep.episode}: encoder={encoder_name}  threads={_cpu_threads}  crf={self.crf}")
+
         cmd = [
             str(ffmpeg_path), "-y",
+            "-threads", str(_cpu_threads),
             "-i", str(ep.video_path),
             "-vf", vf_filter,
-            "-c:v", "libx264",
-            "-preset", self.ffpreset,
-            "-crf", str(self.crf),
+            "-c:v", encoder_name,
+            *encoder_params,
             "-c:a", "copy",
             "-avoid_negative_ts", "make_zero",
         ]
+        # For libx264: also cap encoder-internal thread count explicitly
+        if encoder_name == "libx264":
+            cmd += ["-x264-params", f"threads={_cpu_threads}"]
         if orig_secs is not None:
             cmd += ["-t", f"{orig_secs:.6f}"]
         cmd += ["-loglevel", "warning", str(out_path)]
 
-        import platform as _platform
-        _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if _platform.system() == "Windows" else {}
+        # Run ffmpeg at below-normal priority so it yields to foreground apps
+        if _platform.system() == "Windows":
+            _BELOW_NORMAL = 0x00004000   # BELOW_NORMAL_PRIORITY_CLASS
+            _cflags = {"creationflags": sp.CREATE_NO_WINDOW | _BELOW_NORMAL}
+        else:
+            _cflags = {}
         try:
             result = sp.run(cmd, capture_output=True, text=True, timeout=3600, **_cflags)
             if result.stderr.strip():
