@@ -46,13 +46,12 @@ def _get_version() -> str:
 def _get_github_repo() -> str | None:
     """Read github_repo from config.toml, return None if absent."""
     try:
-        for path in (ROOT / "root", BIN_DIR):
-            config_path = path / "config.toml"
-            if config_path.exists():
-                cfg = tomlkit.parse(config_path.read_text(encoding="utf-8"))
-                repo = cfg.get("update", {}).get("github_repo") or cfg.get("general", {}).get("github_repo")
-                if repo:
-                    return repo
+        config_path = BIN_DIR / "config.toml"
+        if config_path.exists():
+            cfg = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+            repo = cfg.get("update", {}).get("github_repo")
+            if repo:
+                return repo
         return None
     except Exception:
         return None
@@ -72,7 +71,21 @@ def _get_current_exe() -> Path:
 
 
 def _get_exe_name() -> str:
-    """Return the .exe filename used in release assets."""
+    """Return the .exe filename used in release assets.
+
+    We store the release exe name in config.toml as 'exe_name' so the updater
+    can match it regardless of how the release is named on GitHub (which may
+    include a version suffix like '-1.0.6'). Falls back to the running exe name.
+    """
+    try:
+        config_path = BIN_DIR / "config.toml"
+        if config_path.exists():
+            cfg = tomlkit.parse(config_path.read_text(encoding="utf-8"))
+            name = cfg.get("update", {}).get("exe_name")
+            if name:
+                return name
+    except Exception:
+        pass
     return _get_current_exe().name
 
 
@@ -164,6 +177,9 @@ class Updater(QObject):
             silent: If True, suppress the "already up-to-date" dialog.
                     Use True when checking automatically at startup.
         """
+        if self._check_worker is not None and self._check_worker.isRunning():
+            return  # Prevent overlapping check calls
+
         api_url = _get_api_url()
         if not api_url:
             if not silent:
@@ -177,6 +193,7 @@ class Updater(QObject):
         self._check_worker = CheckWorker(api_url)
         self._check_worker.result.connect(lambda data: self._on_check_result(data, silent))
         self._check_worker.failed.connect(lambda msg: self._on_check_failed(msg, silent))
+        self._check_worker.finished.connect(self._on_check_finished)
         self._check_worker.start()
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -221,6 +238,12 @@ class Updater(QObject):
         self._latest_tag = latest_tag
         if ret == QMessageBox.Yes:
             self._download(asset["browser_download_url"])
+
+    def _on_check_finished(self) -> None:
+        """Clean up the check worker after it completes."""
+        if self._check_worker:
+            self._check_worker.deleteLater()
+            self._check_worker = None
 
     def _on_check_failed(self, msg: str, silent: bool) -> None:
         if not silent:
@@ -314,12 +337,8 @@ class Updater(QObject):
 
         try:
             subprocess.Popen(
-                ["cmd", "/c", str(bat_path)],
-                creationflags=(
-                    subprocess.CREATE_NO_WINDOW
-                    | subprocess.DETACHED_PROCESS
-                    | subprocess.CREATE_NEW_PROCESS_GROUP
-                ),
+                ["cmd", "/c", "start", "/min", "", str(bat_path)],
+                creationflags=subprocess.CREATE_NO_WINDOW,
                 cwd=str(current_exe.parent),
             )
         except Exception as e:

@@ -172,6 +172,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "update": {
                 "github_repo": "minjaedevs/tool_download_merged_video_sub",
                 "enabled": True,
+                "exe_name": "tool-download-movie.exe",
             },
         }
 

@@ -3,3 +3,5 @@
 # GitHub repo in format "owner/repo"
 github_repo = "minjaedevs/tool_download_merged_video_sub"
 enabled = true
+# Exact filename of the .exe asset on GitHub releases
+exe_name = "tool-download-movie.exe"

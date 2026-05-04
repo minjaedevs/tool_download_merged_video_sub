@@ -8,6 +8,7 @@ hiddenimports = [
     'charset_normalizer',
     'certifi',
     'platformdirs',
+    '_version',
 ]
 
 a = Analysis(
