@@ -14,6 +14,7 @@ from .models import XSEpisode, XSMovie
 from .helpers import (
     _ns_analyze_vtt,
     _ns_get_video_duration,
+    _ns_get_video_duration_secs,
 )
 
 
@@ -140,6 +141,28 @@ class XSVideoPopup(QtWidgets.QDialog):
 
 
 # ============================================================================
+# DURATION WORKER (background ffprobe sum for merged files)
+# ============================================================================
+
+
+class _DurationWorker(QtCore.QThread):
+    """Sum duration of merged video files in background; emit total seconds."""
+    result = QtCore.Signal(float)
+
+    def __init__(self, paths: list, parent=None):
+        super().__init__(parent)
+        self._paths = paths
+
+    def run(self):
+        total = 0.0
+        for p in self._paths:
+            secs = _ns_get_video_duration_secs(p)
+            if secs:
+                total += secs
+        self.result.emit(total)
+
+
+# ============================================================================
 # NS DETAIL DIALOG
 # ============================================================================
 
@@ -199,34 +222,56 @@ class XSDetailDialog(QtWidgets.QDialog):
         QtCore.QTimer.singleShot(0, self._resize_rows)
 
     def _populate(self):
-        """Fill table rows for each episode and update header with completion summary."""
+        """Fill table rows for each episode, update header with status, then load duration async."""
         done_eps = []
         fail_eps = []
+        merged_paths = []
         for ep in self.movie.episodes:
             if not ep.selected:
                 continue
             self._add_episode_row(ep)
             if ep.merged_path and ep.merged_path.exists():
                 done_eps.append(ep.episode)
+                merged_paths.append(ep.merged_path)
             elif ep.status == "error":
                 fail_eps.append(ep.episode)
 
         total = self.movie.selected_count
         if fail_eps:
             fail_str = ", ".join(f"Tập {n}" for n in fail_eps)
-            self.header.setText(
+            self._header_base = (
                 f"<b>{self.movie.name}</b> — {len(done_eps)}/{total} tập"
                 f" &nbsp;|&nbsp; <span style='color:#ef4444'>⚠ Lỗi: {fail_str}</span>"
             )
         elif done_eps and len(done_eps) == total:
-            self.header.setText(
+            self._header_base = (
                 f"<b>{self.movie.name}</b> — {total}/{total} tập"
                 f" &nbsp;|&nbsp; <span style='color:#16a34a'>✅ Hoàn tất</span>"
             )
         else:
-            self.header.setText(
+            self._header_base = (
                 f"<b>{self.movie.name}</b> — {self.movie.selected_count}/{self.movie.total} tập được chọn"
             )
+        self.header.setText(self._header_base)
+
+        # Start background duration calculation for merged files
+        if merged_paths:
+            self._dur_worker = _DurationWorker(merged_paths, parent=self)
+            self._dur_worker.result.connect(self._on_duration_ready)
+            self._dur_worker.start()
+
+    def _on_duration_ready(self, total_secs: float):
+        """Append total merged duration to header once background calc finishes."""
+        if total_secs <= 0:
+            return
+        h = int(total_secs // 3600)
+        m = int((total_secs % 3600) // 60)
+        s = int(total_secs % 60)
+        dur_str = f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+        self.header.setText(
+            self._header_base
+            + f" &nbsp;|&nbsp; Tổng: <b>{dur_str}</b>"
+        )
 
     def _resize_rows(self):
         """Resize table rows to fit wrapped content after the table is shown."""
