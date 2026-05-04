@@ -61,34 +61,17 @@ jobs:
         shell: bash
         run: |
           version="${{ steps.version.outputs.version }}"
-          github_repo="${{ github.repository }}"
 
-          # Update __version__ in app.py (used in UI: about dialog, help dialog)
-          sed -i "s/^__version__ = .*/__version__ = \"${version}\"/" ./app.py
-
-          # Update __version__ in _version.py (used by the updater)
+          # Update __version__ in _version.py (used by updater and imported by app.py)
           sed -i "s/^__version__ = .*/__version__ = \"${version}\"/" ./_version.py
 
-          echo "Patched app.py     -> __version__ = \"${version}\""
           echo "Patched _version.py -> __version__ = \"${version}\""
 
       - name: Build application
         working-directory: ./app
         shell: bash
         run: |
-          pyinstaller --name=tool-download-movie --onefile --windowed \
-            --icon=assets/yt-dlp-gui.ico \
-            --add-data="assets;assets" \
-            --add-data="root;root" \
-            --hidden-import=httpx \
-            --hidden-import=anyio \
-            --hidden-import=charset_normalizer \
-            --hidden-import=certifi \
-            --hidden-import=platformdirs \
-            --hidden-import=httpx_sse \
-            --collect-all=qtawesome \
-            --noupx \
-            app.py --distpath=dist --noconfirm
+          pyinstaller tool-download-movie.spec --clean --noconfirm
 
       - name: Package for distribution
         working-directory: ./app
@@ -123,7 +106,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Upload production release
-        if: ${{ github.event.inputs.nightly == 'false' }}
+        if: ${{ github.event.inputs.nightly != 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}

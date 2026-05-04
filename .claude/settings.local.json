@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\\\Users\\\\Pc\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe\" -m PyInstaller --version)",
+      "Bash(\"C:\\\\Users\\\\Pc\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe\" -c \"from _version import __version__; print\\(__version__\\)\")"
+    ]
+  }
+}
