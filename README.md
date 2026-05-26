@@ -1,17 +1,7 @@
-# yt-dlp-gui
-
-Simplistic graphical interface for the command line tool [yt-dlp](https://github.com/yt-dlp/yt-dlp), extended with a **NetShort mode** for batch episode downloading from xemshort.top with automatic subtitle hardcoding.
 
 ---
 
 ## Features
-
-### Standard Mode (yt-dlp)
-- Download any URL supported by yt-dlp
-- Select quality preset (`best`, `mp4`, `mp3`, or custom)
-- Configure output directory
-- Real-time download log
-- Auto-update yt-dlp on startup
 
 ### NetShort Mode
 - **Fetch episodes** from `xemshort.top` by Movie ID or API URL
@@ -53,53 +43,6 @@ yt-dlp-gui/
 
 ---
 
-## NetShort Mode — Workflow
-
-```
-1. Enter Movie ID  →  [Fetch]
-         │
-         ▼
-2. API returns episode list  →  Episode Picker dialog
-   (or load from saved JSON)      (select episodes to process)
-         │
-         ▼
-3. Add to queue  →  [Start]
-         │
-         ├─ For each movie (parallel per episode):
-         │
-         │   ┌─────────────────────────────────┐
-         │   │  Download Video (.mp4)           │
-         │   │  Download Subtitle (.srt/.vtt)   │  ← skipped if file exists
-         │   └─────────────────────────────────┘
-         │              │
-         │   [Option: Hardcode Sub (merge)]
-         │              │
-         │   ffmpeg burn-in subtitles
-         │   - Font: UTM Alter Gothic (installed per-user)
-         │   - FontSize, Outline, Alignment via force_style
-         │   - Crop overlay removed via crop filter
-         │              │
-         │   Output: {episode}_merged.mp4
-         │
-         └─ Movie status → Done / Error
-```
-
-### Subtitle Re-merge Logic
-
-| Condition | Action |
-|-----------|--------|
-| Merged file does not exist | Run merge |
-| Merged file exists, sub not newer | Skip (already up to date) |
-| Merged file exists, sub is newer | Re-merge automatically |
-
----
-
-## Usage
-
-### Portable (Windows)
-
-Download the latest release ZIP from the [releases page](https://github.com/dsymbol/yt-dlp-gui/releases). Extract and run `yt-dlp-gui.exe`. No installation required — ffmpeg and yt-dlp are bundled.
-
 ### Manual
 
 Requires [Python](https://www.python.org/downloads/) 3.9+.
@@ -137,57 +80,14 @@ Custom presets can be strings or lists:
 mp4_thumbnail = ["-f", "bv*[vcodec^=avc]+ba[ext=m4a]/b", "--embed-thumbnail"]
 ```
 
----
-
-## Subtitle Style (NetShort Mode)
-
-Configured in the NetShort tab UI and applied via ffmpeg `force_style`:
-
-| Setting | Default |
-|---------|---------|
-| Font | UTM Alter Gothic |
-| Font Size | 20 |
-| Outline | 1 |
-| Shadow | 0 |
-| Bold | Yes |
-| Alignment | Bottom center (2) |
-| MarginV | 30px |
-
-The font is installed automatically to the Windows per-user font directory on first run.
-
----
-
-## CLI Commands
-
-### Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### Run (development)
-
-```bash
-cd app
-python app.py
-```
-
-### Regenerate UI code from Qt Designer file
-
-Sau khi chỉnh sửa `app/ui/main_window.ui` trong Qt Designer, chạy lệnh này để cập nhật file Python:
-
-```bash
-pyside6-uic app/ui/main_window.ui -o app/ui/main_window.py
-```
-
 ### Build EXE (PyInstaller)
 
 ```bash
-# Dùng script có sẵn (Windows):
+# Scripts are available (Windows):
 cd app
 rebuild.bat
 
-# Hoặc chạy thủ công:
+# Or run it manually:
 cd app
 pyinstaller --name=yt-dlp-gui --onefile --windowed \
   --icon=assets/yt-dlp-gui.ico \
@@ -203,31 +103,12 @@ pyinstaller --name=yt-dlp-gui --onefile --windowed \
 
 Output EXE: `app/dist/yt-dlp-gui.exe`
 
-### Đóng gói release ZIP
+### Pack release ZIP
 
-```bash
-# Copy EXE vào thư mục release rồi zip:
-cp app/dist/yt-dlp-gui.exe app/release/yt-dlp-gui-vX.Y.Z/
-cd app/release
-zip -r yt-dlp-gui-vX.Y.Z.zip yt-dlp-gui-vX.Y.Z/
-```
+# 1. setup env
+cd yt-dlp-gui/app
+pip install -r ../requirements.txt
+pip install pyinstaller
 
-### Kiểm tra setup (Windows)
-
-```bat
-app\setup_check.bat
-```
-
----
-
-## Building
-
-> Output EXE là `app/dist/yt-dlp-gui.exe`. Copy vào `app/release/yt-dlp-gui-vX.Y.Z/` rồi ZIP để phân phối.
-
-> Nếu có lỗi khi chạy, kiểm tra file `debug.log` trong thư mục ứng dụng.
-
-pyinstaller --name=yt-dlp-gui --clean -y app.py `
-  --icon ./assets/yt-dlp-gui.ico `
-  --add-data "config.toml;." `
-  --add-data "assets;assets" `
-  --noconsole
+# 2. Build  script
+.\rebuild.bat
