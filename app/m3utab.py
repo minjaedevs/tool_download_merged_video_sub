@@ -4,19 +4,25 @@ from __future__ import annotations
 import logging
 
 logger = logging.getLogger(__name__)
+import re
+import unicodedata
 import subprocess as sp
 import uuid
 from pathlib import Path
 
+import requests
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from m3utab_models import M3U8Item
 from m3utab_workers import M3U8DownloadWorker
+from m3utab_pro_workers import YtDlpM3U8DownloadWorker
 
 logger = logging.getLogger(__name__)
 
 _APP_NAME = "M3U8-GUI"
 _CONFIG_KEY = "m3utab"
+_PRO_CONFIG_KEY = "m3utab_pro"
+_KKPHIM_CONFIG_KEY = "kkphim1"
 
 
 # -------------------------------------------------------------------------- #
@@ -48,10 +54,44 @@ def _dark_input() -> str:
 
 def _sanitize_filename(name: str) -> str:
     """Strip unsafe filesystem characters and truncate to 200 chars."""
-    import re
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f\[\]]', "_", name).strip()
     name = re.sub(r"\s+", " ", name)
     return name[:200] or "Untitled"
+
+
+def _settings_text(settings: QtCore.QSettings, key: str, default: str = "") -> str:
+    """Read a text setting while keeping missing/null values as an empty string."""
+    value = settings.value(key, default)
+    if value is None:
+        return default
+    text = str(value).strip()
+    if text.lower() in ("none", "null"):
+        return default
+    return text
+
+
+def _ascii_token(text: str, join_words: bool = False) -> str:
+    """Return an ASCII filesystem-safe token from Vietnamese text."""
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.replace("đ", "d").replace("Đ", "D")
+    words = re.findall(r"[A-Za-z0-9]+", text)
+    if not words:
+        return ""
+    if join_words:
+        return "".join(w[:1].upper() + w[1:] for w in words)
+    return "_".join(words)
+
+
+def _episode_output_name(server_name: str, episode_name: str) -> str:
+    """Build a stable output name from episode and server names."""
+    ep = _ascii_token(episode_name) or "Tap"
+    clean_server = re.sub(r"^[#\s]+", "", server_name or "")
+    parts = re.findall(r"[^\(\)]+", clean_server)
+    server = "_".join(
+        token for token in (_ascii_token(part, join_words=True) for part in parts) if token
+    )
+    return f"{ep}_{server}" if server else ep
 
 
 # -------------------------------------------------------------------------- #
@@ -140,11 +180,11 @@ class M3U8Tab(QtWidgets.QWidget):
         self._cfg_save_dir.setMinimumWidth(350)
         lay.addWidget(self._cfg_save_dir, stretch=1)
 
-        btn_browse = QtWidgets.QPushButton("📁")
-        btn_browse.setToolTip("Chọn thư mục")
-        btn_browse.setStyleSheet(_dark_btn("#e5e7eb", "#d1d5db", text="#374151", padding="4px 10px"))
-        btn_browse.clicked.connect(self._on_browse_save_dir)
-        lay.addWidget(btn_browse)
+        self._btn_browse_save_dir = QtWidgets.QPushButton("📁")
+        self._btn_browse_save_dir.setToolTip("Chọn thư mục")
+        self._btn_browse_save_dir.setStyleSheet(_dark_btn("#e5e7eb", "#d1d5db", text="#374151", padding="4px 10px"))
+        self._btn_browse_save_dir.clicked.connect(self._on_browse_save_dir)
+        lay.addWidget(self._btn_browse_save_dir)
 
         lay.addSpacing(10)
 
@@ -226,7 +266,7 @@ class M3U8Tab(QtWidgets.QWidget):
         self._table = QtWidgets.QTableWidget()
         self._table.setColumnCount(_NUM_COLS)
         self._table.setHorizontalHeaderLabels(
-            ["Tên", "URL", "F", "Trạng thái", "Tiến độ", "Tốc độ", "ETA", "Hành động"]
+            ["Tên", "URL", "F", "Trạng thái", "Tiến độ", "Tốc độ", "Thời gian", "Hành động"]
         )
         self._table.verticalHeader().setVisible(False)
         self._table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
@@ -376,7 +416,7 @@ class M3U8Tab(QtWidgets.QWidget):
     def _load_settings(self):
         """Load persisted save_dir and concurrency from QSettings."""
         s = self.settings()
-        self._cfg_save_dir.setText(s.value("save_dir", ""))
+        self._cfg_save_dir.setText(_settings_text(s, "save_dir"))
         self._cfg_concurrency.setValue(int(s.value("concurrency", 3)))
 
     def _save_settings(self):
@@ -386,8 +426,18 @@ class M3U8Tab(QtWidgets.QWidget):
         s.setValue("concurrency", self._cfg_concurrency.value())
 
     # ------------------------------------------------------------------ Actions
+    def _can_change_save_dir(self) -> bool:
+        return True
+
     def _on_browse_save_dir(self):
         """Open a native file dialog to select the save directory."""
+        if not self._can_change_save_dir():
+            QtWidgets.QMessageBox.information(
+                self,
+                "Không thể đổi thư mục",
+                "Đang có video trong danh sách. Vui lòng xóa/reset danh sách trước khi đổi thư mục lưu.",
+            )
+            return
         path = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Chọn thư mục lưu video",
@@ -398,9 +448,35 @@ class M3U8Tab(QtWidgets.QWidget):
             self._cfg_save_dir.setText(path)
             self._save_settings()
 
+    def _validated_save_dir(self, create: bool = True) -> Path | None:
+        """Return a valid selected save directory, or show an error and return None."""
+        raw = self._cfg_save_dir.text().strip()
+        if not raw or raw.lower() in ("none", "null"):
+            QtWidgets.QMessageBox.information(
+                self,
+                "Thiếu thư mục",
+                "Vui lòng chọn thư mục lưu trước khi tải.",
+            )
+            self._cfg_save_dir.setFocus()
+            return None
+
+        save_dir = Path(raw).expanduser()
+        if create:
+            try:
+                save_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Thư mục không hợp lệ",
+                    f"Không thể tạo hoặc truy cập thư mục lưu:\n{save_dir}\n\n{e}",
+                )
+                self._cfg_save_dir.setFocus()
+                return None
+        return save_dir
+
     def _on_add_clicked(self):
         """Validate inputs, create an M3U8Item, append it to the table and model."""
-        url = self._add_url.text().strip()
+        url = M3U8DownloadWorker.normalize_media_url(self._add_url.text().strip())
         if not url:
             QtWidgets.QMessageBox.information(self, "Thiếu URL", "Vui lòng nhập URL video.")
             return
@@ -420,12 +496,10 @@ class M3U8Tab(QtWidgets.QWidget):
                 self._add_name.setFocus()
                 return
 
-        save_dir = Path(self._cfg_save_dir.text().strip())
-        if not save_dir.name:
+        save_dir = self._validated_save_dir()
+        if save_dir is None:
             QtWidgets.QMessageBox.information(self, "Thiếu thư mục", "Vui lòng chọn thư mục lưu.")
             return
-        save_dir.mkdir(parents=True, exist_ok=True)
-
         # Derive name from URL if not provided
         if not name:
             name = self._derive_name_from_url(url)
@@ -455,8 +529,8 @@ class M3U8Tab(QtWidgets.QWidget):
 
     def _on_bulk_add_clicked(self):
         """Show a dialog to paste multiple items — one per line, format: Name|URL."""
-        save_dir = Path(self._cfg_save_dir.text().strip())
-        if not save_dir.name:
+        save_dir = self._validated_save_dir()
+        if save_dir is None:
             QtWidgets.QMessageBox.information(self, "Thiếu thư mục", "Vui lòng chọn thư mục lưu.")
             return
 
@@ -610,7 +684,8 @@ class M3U8Tab(QtWidgets.QWidget):
             if len(parts) != 2:
                 skipped += 1
                 continue
-            name, url = parts[0].strip(), parts[1].strip()
+            name = parts[0].strip()
+            url = M3U8DownloadWorker.normalize_media_url(parts[1].strip())
             if not name or not url:
                 skipped += 1
                 continue
@@ -821,8 +896,8 @@ class M3U8Tab(QtWidgets.QWidget):
         if item.status == "downloading":
             return
 
-        save_dir = Path(self._cfg_save_dir.text().strip())
-        if not save_dir.name:
+        save_dir = self._validated_save_dir()
+        if save_dir is None:
             QtWidgets.QMessageBox.information(self, "Thiếu thư mục", "Vui lòng chọn thư mục lưu.")
             return
 
@@ -913,8 +988,8 @@ class M3U8Tab(QtWidgets.QWidget):
 
     def _on_start_all(self):
         """Start all pending items up to the configured concurrency limit."""
-        save_dir = Path(self._cfg_save_dir.text().strip())
-        if not save_dir.name:
+        save_dir = self._validated_save_dir()
+        if save_dir is None:
             QtWidgets.QMessageBox.information(self, "Thiếu thư mục", "Vui lòng chọn thư mục lưu.")
             return
 
@@ -928,9 +1003,12 @@ class M3U8Tab(QtWidgets.QWidget):
 
         concurrency = self._cfg_concurrency.value()
         to_start = pending[:concurrency]
-        self._batch_total = len(to_start)
-        self._batch_remaining = self._batch_total
-        self._log(f"Start All: {self._batch_total} video (concurrency={concurrency})")
+        self._batch_total = len(pending)
+        self._batch_remaining = len(to_start)
+        self._log(
+            f"Start All: {self._batch_total} video, chạy trước {len(to_start)} "
+            f"(concurrency={concurrency})"
+        )
 
         for item in to_start:
             self._start_item(item)
@@ -1195,3 +1273,222 @@ class M3U8Tab(QtWidgets.QWidget):
             if item.id in self.workers:
                 self.workers[item.id].stop()
         event.accept()
+
+
+class KkPhimFetchWorker(QtCore.QThread):
+    """Fetch kkphim/phimapi movie metadata without blocking the UI."""
+
+    finished_ok = QtCore.Signal(dict)
+    failed = QtCore.Signal(str)
+
+    def __init__(self, slug: str):
+        super().__init__()
+        self.slug = slug.strip().strip("/")
+
+    def run(self):
+        if not self.slug:
+            self.failed.emit("Vui lòng nhập slug phim.")
+            return
+        url = f"https://phimapi.com/phim/{self.slug}"
+        try:
+            response = requests.get(url, timeout=20)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            self.failed.emit(f"Không fetch được API: {e}")
+            return
+        if not data.get("status"):
+            self.failed.emit(str(data.get("msg") or "API trả về status=false"))
+            return
+        self.finished_ok.emit(data)
+
+
+class KkPhimEpisodeDialog(QtWidgets.QDialog):
+    """Dialog for selecting episodes grouped by source/server."""
+
+    def __init__(self, movie_name: str, episodes: list[dict], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Chọn tập kkphim1")
+        self.setMinimumSize(620, 620)
+        self._checks: list[QtWidgets.QCheckBox] = []
+
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(8)
+
+        title = QtWidgets.QLabel(f"<b>{movie_name}</b>")
+        title.setStyleSheet("font-size: 15px; color: #111827;")
+        lay.addWidget(title)
+
+        tools = QtWidgets.QHBoxLayout()
+        btn_all = QtWidgets.QPushButton("Chọn tất cả")
+        btn_none = QtWidgets.QPushButton("Bỏ chọn tất cả")
+        btn_all.setStyleSheet(_dark_btn("#2563eb", "#1d4ed8", padding="5px 12px"))
+        btn_none.setStyleSheet(_dark_btn("#6b7280", "#4b5563", padding="5px 12px"))
+        btn_all.clicked.connect(lambda: self._set_all(True))
+        btn_none.clicked.connect(lambda: self._set_all(False))
+        tools.addWidget(btn_all)
+        tools.addWidget(btn_none)
+        tools.addStretch(1)
+        lay.addLayout(tools)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        body = QtWidgets.QWidget()
+        body_lay = QtWidgets.QVBoxLayout(body)
+        body_lay.setContentsMargins(4, 4, 4, 4)
+        body_lay.setSpacing(8)
+
+        for group in episodes:
+            server_name = str(group.get("server_name") or "").strip()
+            server_data = group.get("server_data") or []
+            if server_name:
+                lbl = QtWidgets.QLabel(server_name)
+                lbl.setStyleSheet("font-weight: bold; color: #1f2937; padding-top: 6px;")
+                body_lay.addWidget(lbl)
+
+            for ep in server_data:
+                ep_name = str(ep.get("name") or ep.get("slug") or "Tập").strip()
+                url = str(ep.get("link_m3u8") or ep.get("link_embed") or "").strip()
+                if not url:
+                    continue
+                cb = QtWidgets.QCheckBox(ep_name)
+                cb.setChecked(True)
+                cb.setStyleSheet("padding-left: 18px; color: #111827;")
+                cb.setProperty("episode", ep)
+                cb.setProperty("server_name", server_name)
+                cb.setToolTip(url)
+                self._checks.append(cb)
+                body_lay.addWidget(cb)
+
+        body_lay.addStretch(1)
+        scroll.setWidget(body)
+        lay.addWidget(scroll, stretch=1)
+
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            | QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        btn_box.button(QtWidgets.QDialogButtonBox.StandardButton.Ok).setText("Add xác nhận")
+        btn_box.button(QtWidgets.QDialogButtonBox.StandardButton.Cancel).setText("Hủy")
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        lay.addWidget(btn_box)
+
+    def _set_all(self, checked: bool):
+        for cb in self._checks:
+            cb.setChecked(checked)
+
+    def selected(self) -> list[tuple[str, dict]]:
+        result: list[tuple[str, dict]] = []
+        for cb in self._checks:
+            if cb.isChecked():
+                result.append((str(cb.property("server_name") or ""), cb.property("episode")))
+        return result
+
+
+class M3U8ProTab(M3U8Tab):
+    """M3U8 downloader tab using yt-dlp concurrent fragments."""
+
+    def _build_config_bar(self) -> QtWidgets.QWidget:
+        grp = super()._build_config_bar()
+        lay = grp.layout()
+
+        lay.addSpacing(10)
+        lay.addWidget(QtWidgets.QLabel("Fast -N:"))
+        self._cfg_fragments = QtWidgets.QComboBox()
+        self._cfg_fragments.addItems(["4", "8", "16", "32", "64"])
+        self._cfg_fragments.setCurrentText("4")
+        self._cfg_fragments.setFixedWidth(70)
+        self._cfg_fragments.setToolTip("Số fragment yt-dlp tải song song")
+        self._cfg_fragments.setStyleSheet("""
+            QComboBox {
+                background-color: #ffffff;
+                color: #111827;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                padding: 3px 6px;
+            }
+            QComboBox::drop-down { border: none; width: 18px; }
+        """)
+        self._cfg_fragments.currentTextChanged.connect(lambda *_: self._save_settings())
+        lay.addWidget(self._cfg_fragments)
+
+        lay.addWidget(QtWidgets.QLabel("Output:"))
+        self._cfg_container = QtWidgets.QComboBox()
+        self._cfg_container.addItem("MP4", "mp4")
+        self._cfg_container.addItem("TS nhanh", "ts")
+        self._cfg_container.setFixedWidth(90)
+        self._cfg_container.setToolTip("TS nhanh bỏ bước Fixup MP4; MP4 tương thích hơn nhưng có thể chậm hơn")
+        self._cfg_container.setStyleSheet(self._cfg_fragments.styleSheet())
+        self._cfg_container.currentIndexChanged.connect(lambda *_: self._save_settings())
+        lay.addWidget(self._cfg_container)
+
+        return grp
+
+    def _build_table(self) -> QtWidgets.QTableWidget:
+        table = super()._build_table()
+        table.setHorizontalHeaderItem(_COL_ETA, QtWidgets.QTableWidgetItem("ETA"))
+        return table
+
+    def settings(self) -> QtCore.QSettings:
+        """Return settings scoped separately from the ffmpeg M3U8 tab."""
+        return QtCore.QSettings(_APP_NAME, _PRO_CONFIG_KEY)
+
+    def _load_settings(self):
+        """Load persisted save_dir, concurrency, and yt-dlp fragment count."""
+        s = self.settings()
+        self._cfg_save_dir.setText(_settings_text(s, "save_dir"))
+        self._cfg_concurrency.setValue(int(s.value("concurrency", 2)))
+        self._cfg_fragments.setCurrentText(str(s.value("fragments", "8")))
+        mode = str(s.value("container_mode", "mp4"))
+        idx = self._cfg_container.findData(mode)
+        self._cfg_container.setCurrentIndex(idx if idx >= 0 else 0)
+
+    def _save_settings(self):
+        """Persist M3U8 Pro settings."""
+        s = self.settings()
+        s.setValue("save_dir", self._cfg_save_dir.text())
+        s.setValue("concurrency", self._cfg_concurrency.value())
+        s.setValue("fragments", self._cfg_fragments.currentText())
+        s.setValue("container_mode", self._cfg_container.currentData())
+
+    def _start_item(self, item: M3U8Item):
+        """Launch yt-dlp worker for this item."""
+        if item.status == "downloading":
+            return
+
+        save_dir = self._validated_save_dir()
+        if save_dir is None:
+            QtWidgets.QMessageBox.information(self, "Thiếu thư mục", "Vui lòng chọn thư mục lưu.")
+            return
+
+        item.status = "downloading"
+        item.progress = 0.0
+        item.speed = ""
+        item.eta = ""
+        item.error_msg = ""
+        item.save_dir = save_dir
+        self._fill_row(self._row_for_id[item.id], item)
+        self._update_action_buttons()
+
+        worker = YtDlpM3U8DownloadWorker(
+            url=item.url,
+            save_dir=item.save_dir,
+            name=item.name,
+            fmt=item.fmt,
+            fragments=int(self._cfg_fragments.currentText()),
+            container_mode=str(self._cfg_container.currentData()),
+        )
+        item.instance_id = worker.instance_id
+        self.workers[item.id] = worker
+
+        worker.log_msg.connect(self._on_worker_log)
+        worker.progress.connect(self._on_worker_progress)
+        worker.finished.connect(self._on_worker_finished)
+        worker.output_ready.connect(self._on_worker_output_ready)
+        worker.start()
+        self._log(
+            f"[{item.name}] Bắt đầu tải bằng yt-dlp -N {self._cfg_fragments.currentText()} "
+            f"({self._cfg_container.currentText()})..."
+        )

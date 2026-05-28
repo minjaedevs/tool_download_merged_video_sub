@@ -21,7 +21,8 @@ from ui.main_window import Ui_MainWindow
 from utils import BIN_DIR, ROOT, load_toml, save_toml
 from update_version import Updater
 from xemshort import XemShortTab
-from m3utab import M3U8Tab
+from m3utab import M3U8ProTab, M3U8Tab
+from kkphimtab import KkPhimTab
 
 try:
     from _version import __version__
@@ -78,6 +79,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Tab 2: M3U8 Downloader
         m3u8_tab = M3U8Tab()
         tab_widget.addTab(m3u8_tab, "M3U8")
+
+        # Tab 3: M3U8 Pro Downloader
+        m3u8_pro_tab = M3U8ProTab()
+        tab_widget.addTab(m3u8_pro_tab, "M3U8 Pro")
+
+        # Tab 4: kkphim1 API Downloader
+        kkphim_tab = KkPhimTab()
+        tab_widget.addTab(kkphim_tab, "kkphim1")
 
         tab_widget.setCurrentIndex(0)  # default to XemShort
         self.setCentralWidget(tab_widget)

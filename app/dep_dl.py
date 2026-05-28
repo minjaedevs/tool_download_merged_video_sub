@@ -39,6 +39,7 @@ BINARIES = {
 
 FFMPEG_BASE_URL = "https://github.com/imageio/imageio-binaries/raw/183aef992339cc5a463528c75dd298db15fd346f/ffmpeg/"
 DENO_BASE_URL = "https://github.com/denoland/deno/releases/latest/download/"
+YTDLP_BASE_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/"
 
 
 class DepWorker(QThread):
@@ -53,7 +54,7 @@ class DepWorker(QThread):
         if system_os not in BINARIES:
             return
 
-        required_binaries = ["ffmpeg", "ffprobe", "deno"]
+        required_binaries = ["ffmpeg", "ffprobe", "deno", "yt-dlp"]
         missing_exes = [
             exe
             for exe in required_binaries
@@ -69,12 +70,15 @@ class DepWorker(QThread):
         BIN_DIR.mkdir(parents=True, exist_ok=True)
 
         for exe in missing_exes:
-            binary_name = BINARIES[system_os][exe]
-
-            if exe == "deno":
-                url = DENO_BASE_URL + binary_name
+            if exe == "yt-dlp":
+                binary_name = "yt-dlp.exe" if system_os == "Windows" else "yt-dlp"
+                url = YTDLP_BASE_URL + binary_name
             else:
-                url = FFMPEG_BASE_URL + binary_name
+                binary_name = BINARIES[system_os][exe]
+                if exe == "deno":
+                    url = DENO_BASE_URL + binary_name
+                else:
+                    url = FFMPEG_BASE_URL + binary_name
 
             target_name = f"{exe}.exe" if system_os == "Windows" else exe
             target_path = str(BIN_DIR / target_name)

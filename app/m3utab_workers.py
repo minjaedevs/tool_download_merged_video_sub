@@ -10,6 +10,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Optional
+from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
 from PySide6 import QtCore
@@ -53,7 +54,7 @@ class M3U8DownloadWorker(QtCore.QThread):
         fmt: str = "mp4",
     ):
         super().__init__()
-        self.url = url
+        self.url = self.normalize_media_url(url)
         self.save_dir = Path(save_dir)
         self.name = name
         self.fmt = fmt
@@ -61,12 +62,33 @@ class M3U8DownloadWorker(QtCore.QThread):
         self.instance_id: int = uuid.uuid4().int & 0x7FFFFFFF
         self._mutex = QtCore.QMutex()
         self._aborted = False
+        self._proc: Optional[sp.Popen] = None
+
+    @staticmethod
+    def normalize_media_url(url: str) -> str:
+        """Return the actual media URL when a player wrapper URL is pasted."""
+        raw = url.strip()
+        try:
+            parsed = urlparse(raw)
+            qs = parse_qs(parsed.query)
+            nested = qs.get("url", [""])[0].strip()
+            if nested:
+                return unquote(nested)
+        except Exception:
+            pass
+        return raw
 
     # ------------------------------------------------------------------ stop
     def stop(self):
         """Request graceful abort."""
         with QtCore.QMutexLocker(self._mutex):
             self._aborted = True
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
 
     def _is_aborted(self) -> bool:
         with QtCore.QMutexLocker(self._mutex):
@@ -78,12 +100,12 @@ class M3U8DownloadWorker(QtCore.QThread):
         return safe or "video"
 
     def _unique_output_path(self, ext: str = ".mp4") -> Path:
-        """Return save_dir/{safe_name}.mp4, incrementing _N if already exists."""
+        """Return save_dir/{safe_name}.mp4, incrementing " (N)" if it exists."""
         safe = self._safe_name()
         out = self.save_dir / f"{safe}{ext}"
         n = 1
         while out.exists():
-            out = self.save_dir / f"{safe}_{n}{ext}"
+            out = self.save_dir / f"{safe} ({n}){ext}"
             n += 1
         return out
 
@@ -96,47 +118,24 @@ class M3U8DownloadWorker(QtCore.QThread):
         found = shutil.which("ffmpeg")
         return Path(found) if found else None
 
-    def _get_ffprobe_path(self) -> Optional[Path]:
-        """Locate ffprobe alongside ffmpeg."""
-        for fname in ("ffprobe", "ffprobe.exe"):
-            candidate = Path(sys.executable).parent / fname
-            if candidate.exists():
-                return candidate
-        found = shutil.which("ffprobe")
-        return Path(found) if found else None
-
-    def _probe_duration_ms(self) -> int:
-        """Return total duration in ms via ffprobe; 0 if unknown or on error.
-
-        Used to calculate percentage progress for HLS/M3U8 downloads.
-        ffprobe fetches the playlist and sums segment durations, so this works
-        for both VOD and (partially) for live streams.
-        """
-        ffprobe = self._get_ffprobe_path()
-        if not ffprobe:
-            return 0
-        _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+    def _origin_referer(self) -> str:
+        """Return the URL origin to use as Referer for HLS segment requests."""
         try:
-            result = sp.run(
-                [
-                    str(ffprobe),
-                    "-v", "quiet",
-                    "-show_entries", "format=duration",
-                    "-of", "csv=p=0",
-                    self.url,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=15,
-                **_cflags,
-            )
-            if result.returncode == 0:
-                raw = result.stdout.strip()
-                if raw and raw != "N/A":
-                    return int(float(raw) * 1000)
+            parsed = urlparse(self.url)
+            if parsed.scheme and parsed.netloc:
+                return f"{parsed.scheme}://{parsed.netloc}/"
         except Exception:
             pass
-        return 0
+        return ""
+
+    def _ffmpeg_headers(self, referer: str) -> str:
+        """Build CRLF-delimited HTTP headers for ffmpeg."""
+        headers = {
+            "Referer": referer,
+            "Accept": DOWNLOAD_HEADERS["Accept"],
+            "Accept-Language": DOWNLOAD_HEADERS["Accept-Language"],
+        }
+        return "".join(f"{key}: {value}\r\n" for key, value in headers.items() if value)
 
     @staticmethod
     def _find_output_video(base_dir: Path, instance_id: int, title: str = "") -> Optional[Path]:
@@ -232,7 +231,7 @@ class M3U8DownloadWorker(QtCore.QThread):
                     downloaded = 0
                     out_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(tmp, "wb") as f:
-                        for chunk in r.iter_content(256 * 1024):
+                        for chunk in r.iter_content(1024 * 1024):
                             if self._is_aborted():
                                 tmp.unlink(missing_ok=True)
                                 return False, "Stopped by user"
@@ -271,8 +270,8 @@ class M3U8DownloadWorker(QtCore.QThread):
     def _download_ffmpeg(self, out_path: Path) -> tuple[bool, str]:
         """Download HLS/M3U8 stream via ffmpeg -i url -c copy with progress.
 
-        Parses duration to calculate percentage, adds referer for anti-hotlink sites,
-        and verifies output size before returning success.
+        Starts ffmpeg immediately instead of probing duration first. For HLS this
+        avoids an extra playlist/segment scan before the real download begins.
         """
         iid = self.instance_id
         ffmpeg_path = self._get_ffmpeg_path()
@@ -282,56 +281,50 @@ class M3U8DownloadWorker(QtCore.QThread):
         out_path.parent.mkdir(parents=True, exist_ok=True)
         _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
 
-        # Extract base URL for referer from the M3U8 URL
-        from urllib.parse import urlparse
-        referer = ""
-        try:
-            parsed = urlparse(self.url)
-            referer = f"{parsed.scheme}://{parsed.netloc}/"
-        except Exception:
-            pass
+        referer = self._origin_referer()
 
         cmd = [
             str(ffmpeg_path), "-y",
             "-loglevel", "warning",        # global — before first -i
             "-progress", "pipe:1",         # global — write progress to stdout
-            "-headers", f"Referer: {referer}",
+            "-user_agent", DOWNLOAD_HEADERS["User-Agent"],
+            "-headers", self._ffmpeg_headers(referer),
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_at_eof", "1",
+            "-reconnect_delay_max", "5",
+            "-rw_timeout", "15000000",
+            "-http_persistent", "1",
+            "-http_multiple", "1",
             "-i", self.url,
             "-c", "copy",
             "-bsf:a", "aac_adtstoasc",     # fix AAC-ADTS → MP4 AAC (correct audio duration)
             "-avoid_negative_ts", "make_zero",  # normalise HLS PTS to start at 0
-            "-movflags", "+faststart",     # write moov at start → seekable output
             "-f", "mp4",
             str(out_path),
         ]
         self.log_msg.emit(iid, f"ffmpeg: {ffmpeg_path.name}  {self.url[:60]}...")
 
-        # Probe duration BEFORE starting ffmpeg so the stdout pipe is never left
-        # unread while we block — avoids the 4 KiB Windows pipe-buffer deadlock.
-        self.log_msg.emit(iid, "Đang lấy thông tin video...")
-        total_duration_ms = self._probe_duration_ms()
-        if total_duration_ms > 0:
-            total_s = total_duration_ms // 1000
-            self.log_msg.emit(iid, f"Thời lượng: {total_s // 60}:{total_s % 60:02d}")
-        else:
-            self.log_msg.emit(iid, "Không xác định thời lượng — hiển thị thời gian thực")
+        # Skip ffprobe here: duration is only needed for percent/ETA and costs an
+        # extra playlist scan before the real HLS download starts.
+        self.log_msg.emit(iid, "Bắt đầu run ffmpeg download video.")
 
         if self._is_aborted():
             return False, "Stopped by user"
 
-        proc: Optional[sp.Popen] = None
         try:
-            proc = sp.Popen(
+            self._proc = sp.Popen(
                 cmd,
                 stdout=sp.PIPE,
                 stderr=sp.PIPE,
                 text=True,
                 **_cflags,
             )
+            proc = self._proc
 
             out_time_ms = 0
             last_size_kb = 0
-            last_speed_x = 1.0    # realtime multiplier from ffmpeg  speed=Nx
+            last_speed = ""
 
             # Drain stderr in a separate thread to avoid deadlock
             import threading
@@ -378,25 +371,13 @@ class M3U8DownloadWorker(QtCore.QThread):
                     except ValueError:
                         pass
                 elif key == "speed":
-                    # "2.00x" → 2.0
-                    try:
-                        last_speed_x = float(val.rstrip("x")) if val not in ("N/A", "0x") else 1.0
-                    except ValueError:
-                        pass
+                    last_speed = val if val and val not in ("N/A", "0x") else ""
 
                 if out_time_ms > 0:
-                    size_str = f"{last_size_kb} KiB"
-                    if total_duration_ms > 0:
-                        pct = min(out_time_ms / total_duration_ms * 100, 99.9)
-                        remaining_ms = total_duration_ms - out_time_ms
-                        eta_s = int(remaining_ms / max(last_speed_x, 0.01) / 1000)
-                        eta_str = f"{eta_s // 60}:{eta_s % 60:02d}"
-                        self.progress.emit(iid, "downloading", pct, size_str, eta_str, "")
-                    else:
-                        # Unknown total — show elapsed in ETA column
-                        elapsed_s = out_time_ms // 1000
-                        eta_str = f"{elapsed_s // 60}:{elapsed_s % 60:02d}"
-                        self.progress.emit(iid, "downloading", 0.0, size_str, eta_str, "")
+                    elapsed_s = out_time_ms // 1000
+                    elapsed_str = f"{elapsed_s // 60}:{elapsed_s % 60:02d}"
+                    speed_str = last_speed or f"{last_size_kb} KiB"
+                    self.progress.emit(iid, "downloading", 0.0, speed_str, elapsed_str, "")
 
             ret = proc.wait()
 
@@ -433,11 +414,12 @@ class M3U8DownloadWorker(QtCore.QThread):
                 out_path.unlink(missing_ok=True)
             return False, str(e)
         finally:
-            if proc is not None and proc.poll() is None:
+            if self._proc is not None and self._proc.poll() is None:
                 try:
-                    proc.kill()
+                    self._proc.kill()
                 except Exception:
                     pass
+            self._proc = None
 
     # ------------------------------------------------------------------ run
     def run(self):
