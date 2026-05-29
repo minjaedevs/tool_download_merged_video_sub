@@ -21,8 +21,8 @@ from ui.main_window import Ui_MainWindow
 from utils import BIN_DIR, ROOT, load_toml, save_toml
 from update_version import Updater
 from xemshort import XemShortTab
-from m3utab import M3U8ProTab, M3U8Tab
-from kkphimtab import KkPhimTab
+from app.m3u8.m3utab import M3U8ProTab, M3U8Tab
+from app.kkphim1.kkphimtab import KkPhimTab
 
 try:
     from _version import __version__

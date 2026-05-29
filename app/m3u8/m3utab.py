@@ -13,9 +13,9 @@ from pathlib import Path
 import requests
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from m3utab_models import M3U8Item
-from m3utab_workers import M3U8DownloadWorker
-from m3utab_pro_workers import YtDlpM3U8DownloadWorker
+from app.m3u8.m3utab_models import M3U8Item
+from app.m3u8.m3utab_workers import M3U8DownloadWorker
+from app.m3u8pro.m3utab_pro_workers import YtDlpM3U8DownloadWorker
 
 logger = logging.getLogger(__name__)
 

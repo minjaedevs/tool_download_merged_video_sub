@@ -17,7 +17,7 @@ except Exception:
     QMediaPlayer = None
     QVideoWidget = None
 
-from m3utab import (
+from app.m3u8.m3utab import (
     _APP_NAME,
     _dark_btn,
     _dark_input,
