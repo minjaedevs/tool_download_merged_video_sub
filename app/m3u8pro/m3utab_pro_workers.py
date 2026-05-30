@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from app.m3u8.m3utab_workers import DOWNLOAD_HEADERS, M3U8DownloadWorker
+from m3u8.m3utab_workers import DOWNLOAD_HEADERS, M3U8DownloadWorker
 
 try:
     from utils import BIN_DIR, ROOT

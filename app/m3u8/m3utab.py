@@ -13,9 +13,9 @@ from pathlib import Path
 import requests
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from app.m3u8.m3utab_models import M3U8Item
-from app.m3u8.m3utab_workers import M3U8DownloadWorker
-from app.m3u8pro.m3utab_pro_workers import YtDlpM3U8DownloadWorker
+from m3u8.m3utab_models import M3U8Item
+from m3u8.m3utab_workers import M3U8DownloadWorker
+from m3u8pro.m3utab_pro_workers import YtDlpM3U8DownloadWorker
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ _APP_NAME = "M3U8-GUI"
 _CONFIG_KEY = "m3utab"
 _PRO_CONFIG_KEY = "m3utab_pro"
 _KKPHIM_CONFIG_KEY = "kkphim1"
+DEFAULT_CONCURRENCY = 2
 
 
 # -------------------------------------------------------------------------- #
@@ -144,6 +145,7 @@ class M3U8Tab(QtWidgets.QWidget):
 
         self._build_ui()
         self._load_settings()
+        self._update_action_buttons()
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self):
@@ -191,7 +193,7 @@ class M3U8Tab(QtWidgets.QWidget):
         lay.addWidget(QtWidgets.QLabel("Luồng:"))
         self._cfg_concurrency = QtWidgets.QSpinBox()
         self._cfg_concurrency.setRange(1, 10)
-        self._cfg_concurrency.setValue(3)
+        self._cfg_concurrency.setValue(DEFAULT_CONCURRENCY)
         self._cfg_concurrency.setFixedWidth(60)
         self._cfg_concurrency.setStyleSheet(
             "QSpinBox { background: #ffffff; color: #111827; border: 1px solid #d1d5db; "
@@ -355,7 +357,7 @@ class M3U8Tab(QtWidgets.QWidget):
 
         self._btn_reset = QtWidgets.QPushButton("🔄 Reset")
         self._btn_reset.setStyleSheet(_dark_btn("#6b7280", "#4b5563", padding="6px 14px"))
-        self._btn_reset.setToolTip("Xóa toàn bộ danh sách và reset tiến độ")
+        self._btn_reset.setToolTip("Xóa toàn bộ danh sách, log và reset tiến độ")
         self._btn_reset.clicked.connect(self._on_reset_all)
         lay.addWidget(self._btn_reset)
 
@@ -417,7 +419,7 @@ class M3U8Tab(QtWidgets.QWidget):
         """Load persisted save_dir and concurrency from QSettings."""
         s = self.settings()
         self._cfg_save_dir.setText(_settings_text(s, "save_dir"))
-        self._cfg_concurrency.setValue(int(s.value("concurrency", 3)))
+        self._cfg_concurrency.setValue(int(s.value("concurrency", DEFAULT_CONCURRENCY)))
 
     def _save_settings(self):
         """Persist save_dir and concurrency to QSettings."""
@@ -924,6 +926,7 @@ class M3U8Tab(QtWidgets.QWidget):
         worker.finished.connect(self._on_worker_finished)
         worker.output_ready.connect(self._on_worker_output_ready)
         worker.start()
+        self._update_action_buttons()
         self._log(f"[{item.name}] Bắt đầu tải...")
 
     def _stop_item(self, item: M3U8Item):
@@ -1037,15 +1040,13 @@ class M3U8Tab(QtWidgets.QWidget):
         self._log(f"Đã xóa {len(to_remove)} mục đã hoàn thành.")
 
     def _on_reset_all(self):
-        """Stop all workers, clear the entire table, and reset overall progress — same as fresh start."""
-        # Stop all running workers and wait for threads to finish
-        for item in list(self.items):
-            if item.id in self.workers:
-                w = self.workers[item.id]
-                w.stop()
-                w.quit()
-                w.wait(5000)  # max 5s per worker
-                del self.workers[item.id]
+        """Clear the table and log when no worker is running."""
+        if self._has_running_workers():
+            self._update_action_buttons()
+            return
+        if not self.items and not self._log_lines:
+            self._update_action_buttons()
+            return
 
         # Clear model and table
         self.items.clear()
@@ -1058,7 +1059,9 @@ class M3U8Tab(QtWidgets.QWidget):
         self._overall_pb.setValue(0)
         self._overall_pb.setFormat("Tổng: 0%")
 
-        self._log("Đã reset toàn bộ danh sách.")
+        # Clear log last so reset leaves the tab in an empty fresh state.
+        self._log_lines.clear()
+        self._log_widget.clear()
         self._update_action_buttons()
 
     # ------------------------------------------------------------------ Worker signals
@@ -1222,13 +1225,24 @@ class M3U8Tab(QtWidgets.QWidget):
         """Enable/disable action bar buttons based on current item states."""
         running = sum(1 for it in self.items if it.status == "downloading")
         pending = sum(1 for it in self.items if it.status == "pending")
+        worker_running = self._has_running_workers()
+        has_reset_content = bool(self.items or self._log_lines)
 
         self._btn_start_all.setEnabled(pending > 0)
         self._btn_stop_all.setEnabled(running > 0)
         self._btn_clear_done.setEnabled(any(it.status in ("done", "stopped") for it in self.items))
+        self._btn_reset.setVisible(not worker_running)
+        self._btn_reset.setEnabled(not worker_running and has_reset_content)
 
         count_text = f"{running} đang chạy / {pending} chờ / {len(self.items)} tổng"
         self._lbl_count.setText(count_text)
+
+    def _has_running_workers(self) -> bool:
+        """Return True while any download or fetch worker thread is still active."""
+        if any(worker.isRunning() for worker in self.workers.values()):
+            return True
+        fetch_worker = getattr(self, "_fetch_worker", None)
+        return bool(fetch_worker and fetch_worker.isRunning())
 
     def _update_count_label(self):
         """Shorthand to refresh both action buttons and the item count label."""
@@ -1259,6 +1273,8 @@ class M3U8Tab(QtWidgets.QWidget):
         # Auto-scroll to bottom
         scroll = self._log_widget.verticalScrollBar()
         scroll.setValue(scroll.maximum())
+        if hasattr(self, "_btn_reset"):
+            self._update_action_buttons()
 
     # ------------------------------------------------------------------ Table interaction
     def _on_table_click(self, row: int, col: int):
@@ -1439,7 +1455,7 @@ class M3U8ProTab(M3U8Tab):
         """Load persisted save_dir, concurrency, and yt-dlp fragment count."""
         s = self.settings()
         self._cfg_save_dir.setText(_settings_text(s, "save_dir"))
-        self._cfg_concurrency.setValue(int(s.value("concurrency", 2)))
+        self._cfg_concurrency.setValue(int(s.value("concurrency", DEFAULT_CONCURRENCY)))
         self._cfg_fragments.setCurrentText(str(s.value("fragments", "8")))
         mode = str(s.value("container_mode", "mp4"))
         idx = self._cfg_container.findData(mode)
@@ -1488,6 +1504,7 @@ class M3U8ProTab(M3U8Tab):
         worker.finished.connect(self._on_worker_finished)
         worker.output_ready.connect(self._on_worker_output_ready)
         worker.start()
+        self._update_action_buttons()
         self._log(
             f"[{item.name}] Bắt đầu tải bằng yt-dlp -N {self._cfg_fragments.currentText()} "
             f"({self._cfg_container.currentText()})..."

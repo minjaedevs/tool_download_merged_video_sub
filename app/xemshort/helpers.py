@@ -181,11 +181,11 @@ def _ns_escape_path(path: Path) -> str:
 
 
 def _ns_convert_sub_to_ass(sub_path: Path, font_name: str, font_size: int,
-                            outline: float = 1.0) -> Path:
+                            outline: float = 1.0, ass_path: Optional[Path] = None) -> Path:
     """Convert .srt/.vtt to .ass with full style control embedded in the file."""
     import re as _re
 
-    ass_path = sub_path.with_suffix('.ass')
+    ass_path = ass_path or sub_path.with_suffix('.ass')
 
     header = (
         "[Script Info]\r\n"
@@ -212,7 +212,8 @@ def _ns_convert_sub_to_ass(sub_path: Path, font_name: str, font_size: int,
     events = []
 
     def _to_ass_time(h, m, s, ms):
-        return f"{int(h):02d}:{int(m):02d}:{int(s):02d}.{int(ms):02d}"
+        centis = int(str(ms).ljust(3, "0")[:3]) // 10
+        return f"{int(h):02d}:{int(m):02d}:{int(s):02d}.{centis:02d}"
 
     if is_vtt:
         blocks = _re.split(r'\n{2,}', content.strip())
@@ -246,14 +247,14 @@ def _ns_convert_sub_to_ass(sub_path: Path, font_name: str, font_size: int,
             if t_idx is None:
                 continue
             mt = _re.match(
-                r'(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)',
+                r'(?:(\d+):)?(\d+):(\d+)[,.](\d+)\s*-->\s*(?:(\d+):)?(\d+):(\d+)[,.](\d+)',
                 lines[t_idx]
             )
             if not mt:
                 continue
             h1, m1, s1, ms1, h2, m2, s2, ms2 = mt.groups()
-            start = _to_ass_time(h1, m1, s1, ms1)
-            end = _to_ass_time(h2, m2, s2, ms2)
+            start = _to_ass_time(h1 or 0, m1, s1, ms1)
+            end = _to_ass_time(h2 or 0, m2, s2, ms2)
             text_lines = [l.strip() for l in lines[t_idx + 1:] if l.strip()]
             if not text_lines:
                 continue
@@ -342,7 +343,8 @@ def _ns_get_video_duration_secs(path: Path) -> Optional[float]:
         result = sp.run(
             ["ffprobe", "-v", "error", "-show_entries",
              "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-            capture_output=True, text=True, timeout=10, **kwargs,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=10, **kwargs,
         )
         if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())

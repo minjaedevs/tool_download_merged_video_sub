@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 import time
 import threading
 import uuid
@@ -20,6 +21,7 @@ from .models import XSEpisode, XSMovie
 from .helpers import (
     _ns_b64_decode_safe,
     _ns_color_to_ass,
+    _ns_convert_sub_to_ass,
     _ns_detect_sub_ext,
     _ns_escape_path,
     _ns_get_video_duration,
@@ -70,7 +72,8 @@ def _detect_video_encoder(ffmpeg_path: str) -> str:
     try:
         enc_list = _sp.run(
             [ffmpeg_path, "-encoders", "-v", "quiet"],
-            capture_output=True, text=True, timeout=8, **_cflags,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=8, **_cflags,
         )
         for enc_name, keyword, _ in _GPU_ENCODER_CANDIDATES:
             if keyword not in enc_list.stdout:
@@ -164,7 +167,8 @@ class XSFetchWorker(QtCore.QThread):
                  "-H", f"Referer: {NETSHORT_API_HEADERS['Referer']}",
                  "-H", f"short-source: {NETSHORT_API_HEADERS['short-source']}",
                  url],
-                capture_output=True, text=True, timeout=20, **_cflags
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=20, **_cflags
             )
             if result.returncode != 0 or not result.stdout.strip():
                 # Fall back to requests
@@ -426,7 +430,30 @@ class XSDownloadMergeWorker(QtCore.QThread):
             self.episode_status.emit(ep.episode, "error", self.instance_id)
             return False
 
-        sub_filter = _ns_escape_path(ep.sub_path)
+        tmp_sub_dir = Path(tempfile.gettempdir()) / "yt_dlp_gui_xemshort_subs" / str(self.instance_id)
+        tmp_sub_dir.mkdir(parents=True, exist_ok=True)
+        tmp_ass_path = tmp_sub_dir / f"{base}.ass"
+        sub_for_ffmpeg = _ns_convert_sub_to_ass(
+            ep.sub_path, self.sub_font, self.sub_size, ass_path=tmp_ass_path
+        )
+        if sub_for_ffmpeg == ep.sub_path:
+            if ep.sub_path.suffix.lower() == ".txt":
+                shutil.copy2(ep.video_path, out_path)
+                ep.merged_path = out_path
+                ep.merge_note = "no_sub"
+                ep.status = "done"
+                self.episode_status.emit(ep.episode, "done", self.instance_id)
+                self.log(f"tập {ep.episode}: file .txt không có subtitle hợp lệ -- copy video vào merged/")
+                return True
+
+            tmp_sub_path = tmp_sub_dir / f"{base}{ep.sub_path.suffix.lower() or '.txt'}"
+            try:
+                shutil.copy2(ep.sub_path, tmp_sub_path)
+                sub_for_ffmpeg = tmp_sub_path
+            except Exception as e:
+                self.log(f"không chuẩn hóa được sub tập {ep.episode}: {e}")
+
+        sub_filter = _ns_escape_path(sub_for_ffmpeg)
 
         # Locate bundled fonts directory:
         # 1) next to EXE (user-placed)
@@ -500,7 +527,10 @@ class XSDownloadMergeWorker(QtCore.QThread):
         else:
             _cflags = {}
         try:
-            result = sp.run(cmd, capture_output=True, text=True, timeout=3600, **_cflags)
+            result = sp.run(
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=3600, **_cflags
+            )
             if result.stderr.strip():
                 self.log(f"ffmpeg warning tập {ep.episode}: {result.stderr[:300]}")
             if result.returncode != 0:

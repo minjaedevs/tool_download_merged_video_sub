@@ -17,7 +17,8 @@ except Exception:
     QMediaPlayer = None
     QVideoWidget = None
 
-from app.m3u8.m3utab import (
+from m3u8.m3utab import (
+    DEFAULT_CONCURRENCY,
     _APP_NAME,
     _dark_btn,
     _dark_input,
@@ -379,7 +380,7 @@ class KkPhimTab(M3U8ProTab):
     def _load_settings(self):
         s = self.settings()
         self._cfg_save_dir.setText(str(s.value("save_dir", "") or ""))
-        self._cfg_concurrency.setValue(int(s.value("concurrency", 2)))
+        self._cfg_concurrency.setValue(int(s.value("concurrency", DEFAULT_CONCURRENCY)))
         self._cfg_fragments.setCurrentText(str(s.value("fragments", "4")))
         mode = str(s.value("container_mode", "mp4"))
         idx = self._cfg_container.findData(mode)
@@ -435,10 +436,12 @@ class KkPhimTab(M3U8ProTab):
         self._fetch_worker.failed.connect(self._on_fetch_failed)
         self._fetch_worker.finished.connect(self._on_fetch_done)
         self._fetch_worker.start()
+        self._update_action_buttons()
 
     def _on_fetch_done(self):
         self._btn_fetch.setEnabled(True)
         self._btn_fetch.setText("Fetch")
+        self._update_action_buttons()
 
     def _on_fetch_failed(self, msg: str):
         self._log(f"Fetch lỗi: {msg}")
@@ -553,6 +556,7 @@ class KkPhimTab(M3U8ProTab):
         worker.finished.connect(self._on_worker_finished)
         worker.output_ready.connect(self._on_worker_output_ready)
         worker.start()
+        self._update_action_buttons()
         self._log(
             f"[{item.name}] Bắt đầu tải kkphim1 bằng yt-dlp -N {self._cfg_fragments.currentText()} "
             f"({self._cfg_container.currentText()})..."

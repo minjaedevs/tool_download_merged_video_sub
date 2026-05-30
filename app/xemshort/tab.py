@@ -45,7 +45,9 @@ class XemShortTab(QtWidgets.QWidget):
         super().__init__(parent)
         self.movies: list[XSMovie] = []
         self.nsworker: XSDownloadMergeWorker | None = None
+        self._ns_workers: list[XSDownloadMergeWorker] = []
         self._ns_iterator = None
+        self._ns_active_worker_id: int | None = None
         self._fetch_instance_id: int = 0          # instance_id của fetch worker đang active
         self._fetch_workers: list[XSFetchWorker] = []  # giữ ref để tránh GC khi thread đang chạy
         self._build_ui()
@@ -64,11 +66,11 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_concurrency_spin.setValue(int(s.value("concurrency", 4)))
         self.ns_sub_checkbox.setChecked(s.value("download_sub", True, type=bool))
         self.ns_merge_checkbox.setChecked(s.value("do_merge", True, type=bool))
-        self.ns_crf_spin.setValue(int(s.value("crf", 26)))
-        self.ns_encode_threads_spin.setValue(int(s.value("encode_threads", 4)))
+        self.ns_crf_spin.setValue(int(s.value("crf", 20)))
+        self.ns_encode_threads_spin.setValue(int(s.value("encode_threads", 3)))
         self.ns_sub_font_combo.setCurrentText(s.value("sub_font", "UTM Alter Gothic"))
-        self.ns_sub_size_spin.setValue(int(s.value("sub_size", 20)))
-        self.ns_sub_margin_v_spin.setValue(int(s.value("sub_margin_v", 30)))
+        self.ns_sub_size_spin.setValue(int(s.value("sub_size", 15)))
+        self.ns_sub_margin_v_spin.setValue(int(s.value("sub_margin_v", 70)))
         self.ns_sub_color_combo.setCurrentText(s.value("sub_color", "Trắng"))
         self.ns_sub_bold_cb.setChecked(s.value("sub_bold", True, type=bool))
         self.ns_sub_italic_cb.setChecked(s.value("sub_italic", False, type=bool))
@@ -134,18 +136,18 @@ class XemShortTab(QtWidgets.QWidget):
         opts.addWidget(QtWidgets.QLabel("CRF:"))
         self.ns_crf_spin = QtWidgets.QSpinBox()
         self.ns_crf_spin.setRange(18, 32)
-        self.ns_crf_spin.setValue(26)
-        self.ns_crf_spin.setToolTip("CRF: 18=chất lượng cao/file lớn, 26=cân bằng (khuyến nghị), 32=file nhỏ")
+        self.ns_crf_spin.setValue(20)
+        self.ns_crf_spin.setToolTip("CRF: 18=chất lượng cao/file lớn, 20=chất lượng cao (mặc định), 32=file nhỏ")
         opts.addWidget(self.ns_crf_spin)
         opts.addSpacing(10)
         opts.addWidget(QtWidgets.QLabel("Threads encode:"))
         self.ns_encode_threads_spin = QtWidgets.QSpinBox()
         self.ns_encode_threads_spin.setRange(1, 32)
-        self.ns_encode_threads_spin.setValue(4)
+        self.ns_encode_threads_spin.setValue(3)
         self.ns_encode_threads_spin.setToolTip(
             "Số threads dành cho encode video (x264/GPU).\n"
             "Thấp hơn = ít CPU hơn nhưng encode chậm hơn.\n"
-            "Mặc định 4 để cân bằng CPU.")
+            "Mặc định 3 để giảm tải CPU.")
         opts.addWidget(self.ns_encode_threads_spin)
         opts.addStretch()
         cfg_layout.addRow("Tùy chọn:", opts)
@@ -170,17 +172,17 @@ class XemShortTab(QtWidgets.QWidget):
         sub_style_row.addWidget(QtWidgets.QLabel("Size:"))
         self.ns_sub_size_spin = QtWidgets.QSpinBox()
         self.ns_sub_size_spin.setRange(12, 80)
-        self.ns_sub_size_spin.setValue(20)
+        self.ns_sub_size_spin.setValue(15)
         sub_style_row.addWidget(self.ns_sub_size_spin)
         sub_style_row.addSpacing(12)
         sub_style_row.addWidget(QtWidgets.QLabel("MarginV:"))
         self.ns_sub_margin_v_spin = QtWidgets.QSpinBox()
         self.ns_sub_margin_v_spin.setRange(0, 300)
-        self.ns_sub_margin_v_spin.setValue(30)
+        self.ns_sub_margin_v_spin.setValue(70)
         self.ns_sub_margin_v_spin.setToolTip(
             "Vị trí sub theo chiều dọc (MarginV).\n"
             "0 = sát mép dưới, tăng để đẩy sub lên cao hơn.\n"
-            "Mặc định: 30")
+            "Mặc định: 70")
         sub_style_row.addWidget(self.ns_sub_margin_v_spin)
         sub_style_row.addSpacing(12)
         sub_style_row.addWidget(QtWidgets.QLabel("Màu:"))
@@ -313,6 +315,13 @@ class XemShortTab(QtWidgets.QWidget):
             "QPushButton:disabled { background-color: #9ca3af; }")
         self.ns_stop_btn.clicked.connect(self._ns_on_stop)
         hdr.addWidget(self.ns_stop_btn)
+        self.ns_reset_btn = QtWidgets.QPushButton("Reset")
+        self.ns_reset_btn.setStyleSheet(
+            "QPushButton { background-color: #6b7280; color: white; font-weight: bold; "
+            "padding: 6px 12px; border-radius: 4px; }"
+            "QPushButton:hover { background-color: #4b5563; }")
+        self.ns_reset_btn.clicked.connect(self._ns_on_reset)
+        hdr.addWidget(self.ns_reset_btn)
         tbl_lay.addLayout(hdr)
 
         self.ns_table = QtWidgets.QTableWidget(0, 7)
@@ -405,7 +414,8 @@ class XemShortTab(QtWidgets.QWidget):
         worker.success.connect(self._ns_on_fetch_success)
         worker.cache_hit.connect(self._ns_on_fetch_cache_hit)
         worker.error.connect(self._ns_on_fetch_error)
-        worker.finished.connect(lambda: self.ns_fetch_btn.setEnabled(True))
+        worker.finished.connect(
+            lambda: self.ns_fetch_btn.setEnabled(not (self.nsworker and self.nsworker.isRunning())))
         worker.finished.connect(worker.deleteLater)
         worker.finished.connect(
             lambda w=worker: self._fetch_workers.remove(w) if w in self._fetch_workers else None
@@ -752,11 +762,13 @@ class XemShortTab(QtWidgets.QWidget):
             self._log("Không có phim nào cần tải.")
             self.ns_start_btn.setEnabled(True)
             self.ns_stop_btn.setEnabled(False)
+            self.ns_reset_btn.setEnabled(True)
             self.ns_fetch_btn.setEnabled(True)
             return
 
         self.ns_start_btn.setEnabled(False)
         self.ns_stop_btn.setEnabled(True)
+        self.ns_reset_btn.setEnabled(False)
         self.ns_fetch_btn.setEnabled(False)
         self.ns_progress_bar.setValue(0)
         for m in self.movies:
@@ -767,11 +779,14 @@ class XemShortTab(QtWidgets.QWidget):
         try:
             movie = next(iterator)
         except StopIteration:
+            self._ns_active_worker_id = None
             self._log("=== TẤT CẢ HOÀN TẤT ===")
             self.ns_status.setText("Hoàn tất.")
-            self.ns_start_btn.setEnabled(True)
+            running = self._ns_any_worker_running()
+            self.ns_start_btn.setEnabled(not running)
             self.ns_stop_btn.setEnabled(False)
-            self.ns_fetch_btn.setEnabled(True)
+            self.ns_reset_btn.setEnabled(not running)
+            self.ns_fetch_btn.setEnabled(not running)
             self.ns_progress_bar.setValue(100)
             self._ns_update_all_row_btns()
             QtWidgets.QMessageBox.information(self, "Hoàn tất",
@@ -790,7 +805,7 @@ class XemShortTab(QtWidgets.QWidget):
 
         self._ns_block_movie_btns(row, True)
 
-        self.nsworker = XSDownloadMergeWorker(
+        worker = XSDownloadMergeWorker(
             movie,
             concurrency=self.ns_concurrency_spin.value(),
             download_sub=self.ns_sub_checkbox.isChecked(),
@@ -805,24 +820,48 @@ class XemShortTab(QtWidgets.QWidget):
             sub_bold=self.ns_sub_bold_cb.isChecked(),
             sub_italic=self.ns_sub_italic_cb.isChecked(),
         )
-        wid = self.nsworker.instance_id
+        self.nsworker = worker
+        self._ns_workers.append(worker)
+        wid = worker.instance_id
+        self._ns_active_worker_id = wid
         self._log(f"[worker-{wid}] Bắt đầu '{movie.name}'...")
 
         def _on_log(msg):
+            if self._ns_active_worker_id != wid:
+                return
             self._log(f"[worker-{wid}] {msg}")
 
-        self.nsworker.log_msg.connect(_on_log)
-        self.nsworker.progress.connect(
+        worker.log_msg.connect(_on_log)
+        worker.progress.connect(
             lambda d, t, i=wid: self._ns_on_progress(d, t, i))
-        self.nsworker.episode_status.connect(
+        worker.episode_status.connect(
             lambda e, s, i=wid, m=movie, r=row: self._ns_on_episode_status(m, r, e, s, i))
-        self.nsworker.finished_all.connect(
+        worker.finished_all.connect(
             lambda i=wid, m=movie, it=iterator: self._ns_on_movie_done(m, it, i))
+        worker.finished.connect(
+            lambda i=wid, w=worker: self._ns_on_worker_finished(i, w))
+        worker.finished.connect(worker.deleteLater)
         self._ns_iterator = iterator
-        self.nsworker.start()
+        worker.start()
+
+    def _ns_any_worker_running(self) -> bool:
+        return any(worker.isRunning() for worker in self._ns_workers)
+
+    def _ns_on_worker_finished(self, instance_id: int, worker: XSDownloadMergeWorker):
+        if worker in self._ns_workers:
+            self._ns_workers.remove(worker)
+        if self.nsworker is worker:
+            self.nsworker = None
+        if self._ns_active_worker_id == instance_id:
+            self._ns_active_worker_id = None
+        if not self._ns_any_worker_running() and self._ns_active_worker_id is None and self._ns_iterator is None:
+            self.ns_start_btn.setEnabled(bool(self.movies))
+            self.ns_stop_btn.setEnabled(False)
+            self.ns_reset_btn.setEnabled(True)
+            self.ns_fetch_btn.setEnabled(True)
 
     def _ns_on_progress(self, done: int, total: int, instance_id: int):
-        if self.nsworker and self.nsworker.instance_id != instance_id:
+        if self._ns_active_worker_id != instance_id:
             return
         pct = int(done / total * 100) if total else 0
         self.ns_progress_bar.setValue(pct)
@@ -830,7 +869,7 @@ class XemShortTab(QtWidgets.QWidget):
 
     def _ns_on_episode_status(self, movie: XSMovie, row: int, ep_num: int, status: str, instance_id: int = 0,
                                skip_instance_check: bool = False):
-        if not skip_instance_check and self.nsworker and self.nsworker.instance_id != instance_id:
+        if not skip_instance_check and self._ns_active_worker_id != instance_id:
             return
         # Find episode by number
         ep = next((e for e in movie.episodes if e.episode == ep_num), None)
@@ -850,10 +889,29 @@ class XemShortTab(QtWidgets.QWidget):
         self._ns_iterator = None
         if self.nsworker and self.nsworker.isRunning():
             self.nsworker.stop()
-        self.ns_start_btn.setEnabled(True)
+        self.ns_start_btn.setEnabled(False)
         self.ns_stop_btn.setEnabled(False)
-        self.ns_fetch_btn.setEnabled(True)
+        self.ns_reset_btn.setEnabled(False)
+        self.ns_fetch_btn.setEnabled(False)
         self._ns_update_all_row_btns()
+
+    def _ns_on_reset(self):
+        if self._ns_any_worker_running():
+            return
+        self._ns_iterator = None
+        self._ns_active_worker_id = None
+        self.nsworker = None
+        self._ns_workers.clear()
+        self.movies.clear()
+        self.ns_table.setRowCount(0)
+        self.ns_log_text.clear()
+        self.ns_start_btn.setEnabled(False)
+        self.ns_stop_btn.setEnabled(False)
+        self.ns_reset_btn.setEnabled(True)
+        self.ns_fetch_btn.setEnabled(True)
+        self.ns_progress_bar.setValue(0)
+        self.ns_progress_bar.setFormat("%p%")
+        self.ns_status.setText("Sẵn sàng.")
 
     def _ns_remerge_movie(self, movie: XSMovie):
         if self.nsworker and self.nsworker.isRunning():
@@ -883,6 +941,8 @@ class XemShortTab(QtWidgets.QWidget):
         self._ns_on_start()
 
     def _ns_on_movie_done(self, movie: XSMovie, iterator, instance_id: int):
+        if self._ns_active_worker_id != instance_id:
+            return
         # Always update row UI regardless of instance_id —
         # this prevents "Running..." freeze when old worker finishes after new worker started.
         row = self._ns_row_for_movie(movie)
@@ -903,8 +963,15 @@ class XemShortTab(QtWidgets.QWidget):
             self._ns_update_row_btns(movie)
 
         if self._ns_iterator is None:
+            self._ns_active_worker_id = None
+            running = self._ns_any_worker_running()
+            self.ns_start_btn.setEnabled(bool(self.movies) and not running)
+            self.ns_stop_btn.setEnabled(False)
+            self.ns_reset_btn.setEnabled(not running)
+            self.ns_fetch_btn.setEnabled(not running)
             self._log(f"[worker-{instance_id}] iterator đã bị stop, không chạy tiếp.")
             return
+        self._ns_active_worker_id = None
         self._ns_iterator = None
         self._ns_run_next_movie(iterator)
 
