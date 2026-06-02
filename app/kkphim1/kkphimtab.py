@@ -476,7 +476,8 @@ class KkPhimTab(M3U8ProTab):
 
     def _unique_queue_name(self, base_name: str, save_dir: Path) -> str:
         existing = {it.name.strip().lower() for it in self.items}
-        ext = ".ts" if str(self._cfg_container.currentData()) == "ts" else ".mp4"
+        mode = str(self._cfg_container.currentData())
+        ext = ".m3u8" if mode == "m3u8" else ".ts" if mode == "ts" else ".mp4"
         candidate = base_name
         n = 1
         while candidate.strip().lower() in existing or (save_dir / f"{candidate}{ext}").exists():

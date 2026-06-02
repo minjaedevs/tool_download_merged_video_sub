@@ -111,10 +111,19 @@ class NguoncFetchWorker(QtCore.QThread):
 class NguoncFFmpegDownloadWorker(M3U8DownloadWorker):
     """Resolve nguonc embed pages, then download the HLS manifest with ffmpeg."""
 
-    def __init__(self, url: str, save_dir: Path, name: str, fmt: str = "m3u8"):
+    def __init__(
+        self,
+        url: str,
+        save_dir: Path,
+        name: str,
+        fmt: str = "m3u8",
+        container_mode: str = "mp4",
+    ):
         super().__init__(url=url, save_dir=save_dir, name=name, fmt=fmt)
+        self.container_mode = container_mode
         self._embed_referer = ""
         self._manifest_duration_ms = 0
+        self._manifest_text = ""
 
     @staticmethod
     def _decode_b64_json(value: str) -> dict:
@@ -142,7 +151,7 @@ class NguoncFFmpegDownloadWorker(M3U8DownloadWorker):
         return int(total * 1000)
 
     @classmethod
-    def resolve_embed_url(cls, embed_url: str) -> tuple[str, int]:
+    def resolve_embed_url(cls, embed_url: str) -> tuple[str, int, str]:
         response = requests.get(
             embed_url,
             headers={
@@ -170,7 +179,8 @@ class NguoncFFmpegDownloadWorker(M3U8DownloadWorker):
             timeout=20,
         )
         manifest_response.raise_for_status()
-        return manifest_url, cls._duration_ms_from_manifest(manifest_response.text)
+        manifest_text = manifest_response.text
+        return manifest_url, cls._duration_ms_from_manifest(manifest_text), manifest_text
 
     def _origin_referer(self) -> str:
         return self._embed_referer or super()._origin_referer()
@@ -187,19 +197,51 @@ class NguoncFFmpegDownloadWorker(M3U8DownloadWorker):
             return 0.0
         return max(0.0, min(99.9, out_time_ms / self._manifest_duration_ms * 100.0))
 
+    def _save_manifest(self):
+        iid = self.instance_id
+        if not self._manifest_text:
+            response = requests.get(
+                self.url,
+                headers={
+                    **DOWNLOAD_HEADERS,
+                    "Referer": self._embed_referer or self._origin_referer(),
+                },
+                timeout=30,
+            )
+            response.raise_for_status()
+            self._manifest_text = response.text
+        if "#EXTM3U" not in self._manifest_text[:200]:
+            raise ValueError("URL khong tra ve playlist M3U8")
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+        out_path = self._unique_output_path(".m3u8")
+        out_path.write_text(self._manifest_text, encoding="utf-8")
+        self.output_ready.emit(iid, str(out_path))
+        self.progress.emit(iid, "Done", 100.0, "", "", "")
+        self.finished.emit(iid, True, "")
+
     def run(self):
         if self.is_streamc_embed(self.url):
             embed_url = self.url
             self._embed_referer = embed_url
             try:
                 self.log_msg.emit(self.instance_id, "Resolve nguonc embed -> m3u8...")
-                self.url, self._manifest_duration_ms = self.resolve_embed_url(embed_url)
+                self.url, self._manifest_duration_ms, self._manifest_text = self.resolve_embed_url(
+                    embed_url
+                )
                 self.log_msg.emit(self.instance_id, f"Nguonc m3u8: {self.url[:80]}...")
             except Exception as e:
                 self.log_msg.emit(self.instance_id, f"Loi resolve embed nguonc: {e}")
                 self.progress.emit(self.instance_id, "Error", 0.0, "", "", "")
                 self.finished.emit(self.instance_id, False, f"Khong resolve duoc embed: {e}")
                 return
+        if self.container_mode == "m3u8":
+            try:
+                self._save_manifest()
+            except Exception as e:
+                self.log_msg.emit(self.instance_id, f"Loi luu M3U8 nguonc: {e}")
+                self.progress.emit(self.instance_id, "Error", 0.0, "", "", "")
+                self.finished.emit(self.instance_id, False, f"Khong luu duoc M3U8: {e}")
+            return
         super().run()
 
 
@@ -333,6 +375,7 @@ class NguoncTab(KkPhimTab):
             save_dir=item.save_dir,
             name=item.name,
             fmt=item.fmt,
+            container_mode=str(self._cfg_container.currentData()),
         )
         item.instance_id = worker.instance_id
         self.workers[item.id] = worker

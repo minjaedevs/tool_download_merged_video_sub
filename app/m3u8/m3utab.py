@@ -1434,8 +1434,12 @@ class M3U8ProTab(M3U8Tab):
         self._cfg_container = QtWidgets.QComboBox()
         self._cfg_container.addItem("MP4", "mp4")
         self._cfg_container.addItem("TS nhanh", "ts")
-        self._cfg_container.setFixedWidth(90)
-        self._cfg_container.setToolTip("TS nhanh bỏ bước Fixup MP4; MP4 tương thích hơn nhưng có thể chậm hơn")
+        self._cfg_container.addItem("M3U8", "m3u8")
+        self._cfg_container.setFixedWidth(105)
+        self._cfg_container.setToolTip(
+            "MP4/TS tải video; M3U8 chỉ lưu playlist nguồn. "
+            "TS nhanh bỏ bước Fixup MP4; MP4 tương thích hơn nhưng có thể chậm hơn"
+        )
         self._cfg_container.setStyleSheet(self._cfg_fragments.styleSheet())
         self._cfg_container.currentIndexChanged.connect(lambda *_: self._save_settings())
         lay.addWidget(self._cfg_container)

@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import requests
+
 from m3u8.m3utab_workers import DOWNLOAD_HEADERS, M3U8DownloadWorker
 
 try:
@@ -73,9 +75,30 @@ class YtDlpM3U8DownloadWorker(M3U8DownloadWorker):
 
     def _final_output_path(self, out_path: Path, found: Path) -> Path:
         """Return the visible final file path for the selected container mode."""
+        if self.container_mode == "m3u8":
+            return out_path.with_suffix(".m3u8")
         if self.container_mode == "ts":
             return out_path.with_suffix(".ts")
         return out_path.with_suffix(found.suffix)
+
+    def _download_manifest(self, out_path: Path) -> tuple[bool, str, Path | None]:
+        iid = self.instance_id
+        referer = self._origin_referer()
+        headers = dict(DOWNLOAD_HEADERS)
+        if referer:
+            headers["Referer"] = referer
+        try:
+            response = requests.get(self.url, headers=headers, timeout=30)
+            response.raise_for_status()
+            text = response.text
+            if "#EXTM3U" not in text[:200]:
+                return False, "URL khong tra ve playlist M3U8", None
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(text, encoding="utf-8")
+            self.log_msg.emit(iid, f"Saved M3U8 playlist: {out_path.name}")
+            return True, "", out_path
+        except Exception as e:
+            return False, f"Khong luu duoc M3U8: {e}", None
 
     def _get_yt_dlp_path(self) -> Optional[Path]:
         names = ("yt-dlp.exe", "yt-dlp") if sys.platform == "win32" else ("yt-dlp", "yt-dlp.exe")
@@ -248,11 +271,16 @@ class YtDlpM3U8DownloadWorker(M3U8DownloadWorker):
         iid = self.instance_id
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
-        out_path = self._unique_output_path(".ts" if self.container_mode == "ts" else ".mp4")
-        self.log_msg.emit(iid, f"Starting Pro: {self.name} -> {out_path.stem}.%(ext)s")
-        self.progress.emit(iid, "downloading", 0.0, "", "", "")
-
-        ok, err, final_path = self._download_ytdlp(out_path)
+        if self.container_mode == "m3u8":
+            out_path = self._unique_output_path(".m3u8")
+            self.log_msg.emit(iid, f"Starting Pro: {self.name} -> {out_path.name}")
+            self.progress.emit(iid, "downloading", 0.0, "", "", "")
+            ok, err, final_path = self._download_manifest(out_path)
+        else:
+            out_path = self._unique_output_path(".ts" if self.container_mode == "ts" else ".mp4")
+            self.log_msg.emit(iid, f"Starting Pro: {self.name} -> {out_path.stem}.%(ext)s")
+            self.progress.emit(iid, "downloading", 0.0, "", "", "")
+            ok, err, final_path = self._download_ytdlp(out_path)
 
         if self._is_aborted():
             self.log_msg.emit(iid, "Đã dừng.")
