@@ -137,6 +137,14 @@ class M3U8DownloadWorker(QtCore.QThread):
         }
         return "".join(f"{key}: {value}\r\n" for key, value in headers.items() if value)
 
+    def _ffmpeg_input_options(self) -> list[str]:
+        """Return extra ffmpeg options that must appear before the input URL."""
+        return []
+
+    def _ffmpeg_progress_percent(self, out_time_ms: int) -> float:
+        """Return the progress percentage for ffmpeg output time."""
+        return 0.0
+
     @staticmethod
     def _find_output_video(base_dir: Path, instance_id: int, title: str = "") -> Optional[Path]:
         """Fallback glob search — used by m3utab.py if output_ready was not emitted."""
@@ -296,6 +304,7 @@ class M3U8DownloadWorker(QtCore.QThread):
             "-rw_timeout", "15000000",
             "-http_persistent", "1",
             "-http_multiple", "1",
+            *self._ffmpeg_input_options(),
             "-i", self.url,
             "-c", "copy",
             "-bsf:a", "aac_adtstoasc",     # fix AAC-ADTS → MP4 AAC (correct audio duration)
@@ -377,7 +386,8 @@ class M3U8DownloadWorker(QtCore.QThread):
                     elapsed_s = out_time_ms // 1000
                     elapsed_str = f"{elapsed_s // 60}:{elapsed_s % 60:02d}"
                     speed_str = last_speed or f"{last_size_kb} KiB"
-                    self.progress.emit(iid, "downloading", 0.0, speed_str, elapsed_str, "")
+                    pct = self._ffmpeg_progress_percent(out_time_ms)
+                    self.progress.emit(iid, "downloading", pct, speed_str, elapsed_str, "")
 
             ret = proc.wait()
 
