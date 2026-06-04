@@ -15,6 +15,7 @@ from .dialogs import (
     NSVttEditorDialog,
 )
 from .tab import XemShortTab
+from .movie_manager_tab import MovieManagerTab
 
 __all__ = [
     # models
@@ -28,5 +29,5 @@ __all__ = [
     "NSDetailDialog", "NSEpisodePickerDialog", "NSPasteJsonDialog",
     "NSVideoPopup", "NSVttEditorDialog",
     # tab
-    "XemShortTab",
+    "XemShortTab", "MovieManagerTab",
 ]

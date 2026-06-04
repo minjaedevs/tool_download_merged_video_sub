@@ -22,6 +22,7 @@ from .dialogs import (
     _NSPhoneMockup,
 )
 from .helpers import _COLOR_TO_HEX, _ns_check_ffmpeg, _ns_load_bundled_fonts, _ns_color_to_ass
+from .movie_search_dialog import NetShortMovieSearchDialog
 from .models import XSMovie, XSEpisode
 from .workers import XSDownloadMergeWorker, XSFetchWorker
 
@@ -286,6 +287,14 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_movie_id_edit.setPlaceholderText("VD: 2041732413888921612")
         row1.addWidget(self.ns_movie_id_edit, stretch=1)
 
+        self.ns_search_movie_btn = QtWidgets.QPushButton("Tim kiem")
+        self.ns_search_movie_btn.setStyleSheet(
+            "QPushButton { background-color: #7c3aed; color: white; padding: 5px 14px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #6d28d9; }")
+        self.ns_search_movie_btn.clicked.connect(self._ns_on_search_movie)
+        row1.addWidget(self.ns_search_movie_btn)
+
         self.ns_fetch_btn = QtWidgets.QPushButton("Fetch Data")
         self.ns_fetch_btn.setStyleSheet(
             "QPushButton { background-color: #2563eb; color: white; padding: 5px 14px; "
@@ -430,6 +439,16 @@ class XemShortTab(QtWidgets.QWidget):
             self.ns_log_text.verticalScrollBar().maximum())
 
     # ── Fetch ───────────────────────────────────────────────────────────────
+
+    def _ns_on_search_movie(self):
+        dlg = NetShortMovieSearchDialog(self)
+        if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            play_id = dlg.selected_play_id()
+            if play_id:
+                self.ns_movie_id_edit.setText(play_id)
+                self.ns_movie_id_edit.setFocus()
+                self.ns_status.setText(f"Da chon movie id: {play_id}")
+                self._log(f"[search] selected play_id={play_id}")
 
     def _ns_on_fetch(self):
         movie_id = self.ns_movie_id_edit.text().strip()
@@ -969,10 +988,11 @@ class XemShortTab(QtWidgets.QWidget):
                 ep.merged_path = None
                 ep.status = "pending"
                 ep.error_msg = ""
+                ep.merge_note = ""
                 reset += 1
         if reset == 0:
             QtWidgets.QMessageBox.information(self, "Re-merge",
-                                              "Không có tập nào trạng thái 'done' để re-merge.")
+                                              "Không có tập merge thành công để merge lại.")
             return
         row = self._ns_row_for_movie(movie)
         if row >= 0:
@@ -1030,12 +1050,12 @@ class XemShortTab(QtWidgets.QWidget):
         done_new   = [e for e in sel if e.status == "done"
                       and e.merge_note not in ("", ) and not e.merge_note.startswith("skip:")]
         done_skip  = [e for e in sel if e.status == "done" and e.merge_note.startswith("skip:")]
-        done_nosub = [e for e in sel if e.status == "done" and e.merge_note == "no_sub"]
+        done_nosub = [e for e in sel if e.merge_note == "no_sub"]
         done_dur   = [e for e in sel if e.status == "done" and e.merge_note.startswith("dur:")]
-        err_eps    = [e for e in sel if e.status == "error"]
+        err_eps    = [e for e in sel if e.status == "error" and e.merge_note != "no_sub"]
 
         total_success = len(done_new) + len(done_skip)
-        total_fail    = len(err_eps)
+        total_fail    = len(err_eps) + len([e for e in done_nosub if e.status == "error"])
 
         lines = []
 

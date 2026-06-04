@@ -396,6 +396,17 @@ class XSDownloadMergeWorker(QtCore.QThread):
         base = f"ep{str(ep.episode).zfill(padding)}"
         out_path = merge_dir / f"{base}_merged.mp4"
 
+        if not ep.sub_path or not ep.sub_path.exists():
+            ep.merge_note = "no_sub"
+            ep.status = "error"
+            ep.error_msg = "missing subtitle"
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
+            self.log(
+                f"tập {ep.episode}: thiếu sub, bỏ qua merge. "
+                "Hãy fetch data lại rồi Start Download & Merge."
+            )
+            return False
+
         if out_path.exists() and out_path.stat().st_size > 1024:
             stored = _load_merge_sidecar(merge_dir)
             if stored and stored != self._settings_fingerprint():
@@ -410,15 +421,6 @@ class XSDownloadMergeWorker(QtCore.QThread):
                     self.log(f"merge tập {ep.episode} SKIP (đã tồn tại)")
                     return True
                 self.log(f"tập {ep.episode}: sub mới hơn merged -- re-merge...")
-
-        if not ep.sub_path or not ep.sub_path.exists():
-            shutil.copy2(ep.video_path, out_path)
-            ep.merged_path = out_path
-            ep.merge_note = "no_sub"
-            ep.status = "done"
-            self.episode_status.emit(ep.episode, "done", self.instance_id)
-            self.log(f"tập {ep.episode} không có sub -- copy video vào merged/")
-            return True
 
         self.episode_status.emit(ep.episode, "merging", self.instance_id)
         self.log(f"merge tập {ep.episode}...")
@@ -439,13 +441,15 @@ class XSDownloadMergeWorker(QtCore.QThread):
             ep.sub_path, self.sub_font, self.sub_size, ass_path=tmp_ass_path
         )
         if sub_for_ffmpeg == ep.sub_path:
-            shutil.copy2(ep.video_path, out_path)
-            ep.merged_path = out_path
             ep.merge_note = "no_sub"
-            ep.status = "done"
-            self.episode_status.emit(ep.episode, "done", self.instance_id)
-            self.log(f"tập {ep.episode}: subtitle không hợp lệ hoặc rỗng -- copy video vào merged/")
-            return True
+            ep.status = "error"
+            ep.error_msg = "invalid or empty subtitle"
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
+            self.log(
+                f"tập {ep.episode}: subtitle không hợp lệ hoặc rỗng, không merge. "
+                "Hãy fetch/download lại subtitle rồi Start Download & Merge."
+            )
+            return False
 
         sub_filter = _ns_escape_path(sub_for_ffmpeg)
 

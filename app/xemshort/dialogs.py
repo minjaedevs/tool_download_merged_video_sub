@@ -5,9 +5,11 @@ import json
 import os
 import re
 import subprocess as sp
+import tempfile
 from pathlib import Path
 from typing import Optional
 
+import requests
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .models import XSEpisode, XSMovie
@@ -673,6 +675,50 @@ class XSVttEditorDialog(QtWidgets.QDialog):
 # ============================================================================
 
 
+class _EpisodePreviewDownloadWorker(QtCore.QThread):
+    """Download an episode video URL to a temp file for local preview playback."""
+
+    success = QtCore.Signal(str)
+    error = QtCore.Signal(str)
+
+    def __init__(self, url: str, episode: int, parent=None):
+        super().__init__(parent)
+        self.url = url
+        self.episode = episode
+
+    def run(self):
+        try:
+            from .workers import NETSHORT_DOWNLOAD_HEADERS
+
+            tmp_dir = Path(tempfile.gettempdir()) / "yt_dlp_gui_xemshort_preview"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            out_path = tmp_dir / f"preview_ep_{self.episode}_{abs(hash(self.url))}.mp4"
+            if out_path.exists() and out_path.stat().st_size > 0:
+                self.success.emit(str(out_path))
+                return
+
+            with requests.get(
+                self.url,
+                headers=NETSHORT_DOWNLOAD_HEADERS,
+                stream=True,
+                timeout=(15, 120),
+            ) as response:
+                response.raise_for_status()
+                part_path = out_path.with_suffix(out_path.suffix + ".part")
+                with part_path.open("wb") as fh:
+                    for chunk in response.iter_content(chunk_size=1024 * 512):
+                        if self.isInterruptionRequested():
+                            return
+                        if chunk:
+                            fh.write(chunk)
+                if self.isInterruptionRequested():
+                    return
+                part_path.replace(out_path)
+            self.success.emit(str(out_path))
+        except Exception as exc:
+            self.error.emit(f"{type(exc).__name__}: {exc}")
+
+
 class XSEpisodePickerDialog(QtWidgets.QDialog):
     """Dialog for selecting which episodes to add to the download queue."""
 
@@ -680,7 +726,7 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.episodes = episodes
         self.setWindowTitle(f"Chọn tập - {movie_name}")
-        self.resize(500, 600)
+        self.resize(820, 650)
 
         layout = QtWidgets.QVBoxLayout(self)
 
@@ -716,17 +762,13 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
 
         self.list_widget = QtWidgets.QListWidget()
         for ep in episodes:
-            label = f"Tập {ep.episode}"
-            if ep.name and ep.name != movie_name:
-                label += f" - {ep.name}"
-            item = QtWidgets.QListWidgetItem(label)
-            item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(QtCore.Qt.CheckState.Checked)
+            item = QtWidgets.QListWidgetItem()
             item.setData(QtCore.Qt.ItemDataRole.UserRole, ep)
+            item.setSizeHint(QtCore.QSize(720, 42))
             self.list_widget.addItem(item)
+            self.list_widget.setItemWidget(item, self._build_episode_row(ep, movie_name))
         layout.addWidget(self.list_widget, stretch=1)
 
-        self.list_widget.itemChanged.connect(self._update_count)
         self.count_label = QtWidgets.QLabel()
         self._update_count()
         layout.addWidget(self.count_label)
@@ -740,13 +782,170 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
 
+    def _build_episode_row(self, ep: XSEpisode, movie_name: str) -> QtWidgets.QWidget:
+        row = QtWidgets.QWidget()
+        layout = QtWidgets.QHBoxLayout(row)
+        layout.setContentsMargins(6, 3, 6, 3)
+        layout.setSpacing(8)
+
+        checkbox = QtWidgets.QCheckBox()
+        checkbox.setChecked(True)
+        checkbox.toggled.connect(lambda *_: self._update_count())
+        row._episode_checkbox = checkbox
+        row.setProperty("episode_checkbox", checkbox)
+        layout.addWidget(checkbox)
+
+        label_text = f"Tap {ep.episode}"
+        if ep.name and ep.name != movie_name:
+            label_text += f" - {ep.name}"
+        label = QtWidgets.QLabel(label_text)
+        label.setMinimumWidth(220)
+        label.setStyleSheet("font-weight: 600;")
+        layout.addWidget(label, stretch=1)
+
+        video_label = QtWidgets.QLabel("Video: yes" if ep.play else "Video: no")
+        video_label.setStyleSheet("color:#16a34a;" if ep.play else "color:#9ca3af;")
+        layout.addWidget(video_label)
+
+        sub_label = QtWidgets.QLabel("Sub: yes" if ep.subtitle_url else "Sub: no")
+        sub_label.setStyleSheet("color:#16a34a;" if ep.subtitle_url else "color:#9ca3af;")
+        layout.addWidget(sub_label)
+
+        play_btn = QtWidgets.QPushButton("Play")
+        play_btn.setEnabled(bool(ep.play))
+        play_btn.setToolTip(ep.play or "Tap nay khong co video URL")
+        play_btn.setStyleSheet(
+            "QPushButton { background-color:#2563eb;color:white;padding:3px 10px;border-radius:4px; }"
+            "QPushButton:disabled { background-color:#9ca3af; }"
+        )
+        play_btn.clicked.connect(lambda *_args, e=ep: self._preview_episode(e))
+        layout.addWidget(play_btn)
+
+        sub_btn = QtWidgets.QPushButton("Sub")
+        sub_btn.setEnabled(bool(ep.subtitle_url))
+        sub_btn.setToolTip(ep.subtitle_url or "Tap nay khong co subtitle URL")
+        sub_btn.setStyleSheet(
+            "QPushButton { background-color:#059669;color:white;padding:3px 10px;border-radius:4px; }"
+            "QPushButton:disabled { background-color:#9ca3af; }"
+        )
+        sub_btn.clicked.connect(lambda *_args, e=ep: self._open_subtitle_url(e))
+        layout.addWidget(sub_btn)
+        return row
+
+    def _row_checkbox(self, item: QtWidgets.QListWidgetItem) -> QtWidgets.QCheckBox | None:
+        row = self.list_widget.itemWidget(item)
+        if row is None:
+            return None
+        direct_checkbox = getattr(row, "_episode_checkbox", None)
+        if isinstance(direct_checkbox, QtWidgets.QCheckBox):
+            return direct_checkbox
+        checkbox = row.property("episode_checkbox")
+        return checkbox if isinstance(checkbox, QtWidgets.QCheckBox) else None
+
+    def _preview_episode(self, ep: XSEpisode):
+        if not ep.play:
+            return
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle(f"Preview - Tap {ep.episode}")
+        dlg.resize(900, 560)
+        layout = QtWidgets.QVBoxLayout(dlg)
+
+        status = QtWidgets.QLabel("Dang tai video preview...")
+        status.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        status.setStyleSheet("font-size: 14px; color: #6b7280;")
+        layout.addWidget(status, stretch=1)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        open_url_btn = QtWidgets.QPushButton("Mo URL goc")
+        open_url_btn.clicked.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl(ep.play)))
+        btn_row.addWidget(open_url_btn)
+        btn_row.addStretch()
+        close_btn = QtWidgets.QPushButton("Dong")
+        close_btn.clicked.connect(dlg.close)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        worker = _EpisodePreviewDownloadWorker(ep.play, ep.episode, dlg)
+        dlg._preview_worker = worker
+        dlg._preview_player = None
+        dlg._preview_audio = None
+
+        def on_success(path: str):
+            status.setText("Dang mo video...")
+            file_url = QtCore.QUrl.fromLocalFile(path)
+            open_file_btn = QtWidgets.QPushButton("Mo file")
+            open_file_btn.clicked.connect(lambda: QtGui.QDesktopServices.openUrl(file_url))
+            btn_row.insertWidget(1, open_file_btn)
+            try:
+                from PySide6 import QtMultimedia, QtMultimediaWidgets  # type: ignore
+
+                video_widget = QtMultimediaWidgets.QVideoWidget()
+                video_widget.setMinimumHeight(430)
+                layout.replaceWidget(status, video_widget)
+                status.deleteLater()
+
+                player = QtMultimedia.QMediaPlayer(dlg)
+                audio = QtMultimedia.QAudioOutput(dlg)
+                player.setAudioOutput(audio)
+                player.setVideoOutput(video_widget)
+                player.setSource(file_url)
+                audio.setVolume(0.8)
+                dlg._preview_player = player
+                dlg._preview_audio = audio
+
+                play_btn = QtWidgets.QPushButton("Play/Pause")
+                play_btn.clicked.connect(
+                    lambda: player.pause()
+                    if player.playbackState() == QtMultimedia.QMediaPlayer.PlaybackState.PlayingState
+                    else player.play()
+                )
+                btn_row.insertWidget(0, play_btn)
+                player.play()
+            except Exception as exc:
+                status.setText(f"Da tai video nhung khong play duoc trong app: {exc}")
+                QtGui.QDesktopServices.openUrl(file_url)
+
+        def on_error(message: str):
+            status.setText(f"Khong tai duoc preview: {message}")
+
+        worker.success.connect(on_success)
+        worker.error.connect(on_error)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+
+        dlg.finished.connect(
+            lambda *_: dlg._preview_player.stop()
+            if getattr(dlg, "_preview_player", None) is not None
+            else None
+        )
+        dlg.exec()
+        try:
+            if worker.isRunning():
+                worker.requestInterruption()
+                worker.wait(3000)
+        except RuntimeError:
+            pass
+
+    def _open_subtitle_url(self, ep: XSEpisode):
+        if not ep.subtitle_url:
+            return
+        QtWidgets.QApplication.clipboard().setText(ep.subtitle_url)
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl(ep.subtitle_url))
+        QtWidgets.QToolTip.showText(
+            QtGui.QCursor.pos(),
+            "Da copy link sub vao clipboard",
+            None,
+            QtCore.QRect(),
+            1500,
+        )
+
     def _toggle_all(self, check: bool):
-        state = (QtCore.Qt.CheckState.Checked if check
-                 else QtCore.Qt.CheckState.Unchecked)
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             if not item.isHidden():
-                item.setCheckState(state)
+                checkbox = self._row_checkbox(item)
+                if checkbox:
+                    checkbox.setChecked(check)
 
     def _filter(self, text: str):
         text = text.strip().lower()
@@ -770,17 +969,19 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
                 item.setHidden(not visible)
 
     def _update_count(self):
-        n = sum(
-            1 for i in range(self.list_widget.count())
-            if self.list_widget.item(i).checkState() == QtCore.Qt.CheckState.Checked
-        )
+        n = 0
+        for i in range(self.list_widget.count()):
+            checkbox = self._row_checkbox(self.list_widget.item(i))
+            if checkbox and checkbox.isChecked():
+                n += 1
         self.count_label.setText(f"Đã chọn: {n}/{self.list_widget.count()}")
 
     def get_selected_episodes(self) -> list[XSEpisode]:
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             ep: XSEpisode = item.data(QtCore.Qt.ItemDataRole.UserRole)
-            ep.selected = (item.checkState() == QtCore.Qt.CheckState.Checked)
+            checkbox = self._row_checkbox(item)
+            ep.selected = bool(checkbox and checkbox.isChecked())
         return self.episodes
 
 

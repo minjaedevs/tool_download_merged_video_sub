@@ -21,6 +21,7 @@ from ui.main_window import Ui_MainWindow
 from utils import BIN_DIR, ROOT, load_toml, save_toml
 from update_version import Updater
 from xemshort import XemShortTab
+# from xemshort import MovieManagerTab
 from m3u8.m3utab import M3U8ProTab, M3U8Tab
 from kkphim1.kkphimtab import KkPhimTab
 from nguonc.nguonctab import NguoncTab
@@ -77,6 +78,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         xs_tab = XemShortTab()
         tab_widget.addTab(xs_tab, "NetShort")
 
+        # Tab: Movie Manager (ẩn tạm, bật lại khi cần quản lý/sync movie)
+        # movie_tab = MovieManagerTab()
+        # tab_widget.addTab(movie_tab, "Quản lý Movie")
+
         # Tab 2: M3U8 Downloader
         # m3u8_tab = M3U8Tab()
         # tab_widget.addTab(m3u8_tab, "M3U8")
@@ -93,7 +98,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # nguonc_tab = NguoncTab()
         # tab_widget.addTab(nguonc_tab, "nguonc")
 
-        tab_widget.setCurrentIndex(0)  # default to XemShort
+        tab_widget.setCurrentIndex(0)  # default to NetShort
         self.setCentralWidget(tab_widget)
 
         self.show()
