@@ -359,28 +359,27 @@ class XSDownloadMergeWorker(QtCore.QThread):
 
         # ── Subtitle ────────────────────────────────────────────────────────
         if self.download_sub and ep.subtitle_url:
-            existing_sub = next(
-                (folder / f"{base}.{ext}" for ext in ("srt", "vtt", "txt")
-                 if (folder / f"{base}.{ext}").exists()
-                 and (folder / f"{base}.{ext}").stat().st_size > 0),
-                None
-            )
-            if existing_sub:
-                ep.sub_path = existing_sub
-                self.log(f"SKIP sub tập {ep.episode} (đã tồn tại: {existing_sub.name})")
-            else:
-                try:
-                    r = requests.get(ep.subtitle_url,
-                                     headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30)
-                    r.raise_for_status()
-                    ext = _ns_detect_sub_ext(r.content)
-                    sub_path = folder / f"{base}.{ext}"
-                    with open(sub_path, "wb") as f:
-                        f.write(r.content)
-                    ep.sub_path = sub_path
-                    self.log(f"sub tập {ep.episode} OK ({ext}, {len(r.content)} bytes)")
-                except Exception as e:
-                    self.log(f"sub tập {ep.episode} lỗi: {e}")
+            ep.sub_path = None
+            for ext in ("srt", "vtt", "txt"):
+                old_sub = folder / f"{base}.{ext}"
+                if old_sub.exists():
+                    try:
+                        old_sub.unlink()
+                        self.log(f"xóa sub cũ tập {ep.episode}: {old_sub.name}")
+                    except Exception as e:
+                        self.log(f"không xóa được sub cũ tập {ep.episode} ({old_sub.name}): {e}")
+            try:
+                r = requests.get(ep.subtitle_url,
+                                 headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30)
+                r.raise_for_status()
+                ext = _ns_detect_sub_ext(r.content)
+                sub_path = folder / f"{base}.{ext}"
+                with open(sub_path, "wb") as f:
+                    f.write(r.content)
+                ep.sub_path = sub_path
+                self.log(f"sub tập {ep.episode} OK ({ext}, {len(r.content)} bytes)")
+            except Exception as e:
+                self.log(f"sub tập {ep.episode} lỗi: {e}")
 
         return True
 

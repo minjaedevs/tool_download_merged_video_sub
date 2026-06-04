@@ -15,6 +15,8 @@ from .sync_movies_supabase import (
 
 
 PAGE_SIZE = 24
+DEFAULT_SUPABASE_URL = "https://rmsxnajcudkjmtqsfhot.supabase.co"
+DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc3huYWpjdWRram10cXNmaG90Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDUyNDM5NSwiZXhwIjoyMDk2MTAwMzk1fQ.CvLi4fkjjSMbRaeKi85xC_d5MDCCkv2tcz4iuKinOgU"
 
 
 class NetShortSearchWorker(QtCore.QThread):
@@ -146,8 +148,8 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
         self._debounce.timeout.connect(self._search_first_page)
 
         load_env_file()
-        self.supabase_url = os.environ.get("SUPABASE_URL", "").strip()
-        self.supabase_key = os.environ.get("SUPABASE_KEY", "").strip()
+        self.supabase_url = os.environ.get("SUPABASE_URL", "").strip() or DEFAULT_SUPABASE_URL
+        self.supabase_key = os.environ.get("SUPABASE_KEY", "").strip() or DEFAULT_SUPABASE_KEY
 
         self._build_ui()
         QtCore.QTimer.singleShot(100, self._search_first_page)
@@ -272,7 +274,7 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
             return
         self._pending_search = False
         if not self.supabase_url or not self.supabase_key:
-            self.status_label.setText("Thieu SUPABASE_URL hoac SUPABASE_KEY trong .env")
+            self.status_label.setText("Thieu cau hinh Supabase")
             return
         self._selected_movie = None
         self.add_btn.setEnabled(False)
