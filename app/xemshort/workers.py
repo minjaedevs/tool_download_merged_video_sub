@@ -229,6 +229,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
 
     def __init__(self, movie: XSMovie, concurrency: int, download_sub: bool,
                  do_merge: bool, crf: int, preset: str, encode_threads: int = 4,
+                 merge_concurrency: int = 1,
                  sub_font: str = "UTM Alter Gothic", sub_size: int = 20,
                  sub_margin_v: int = 30, sub_color: str = "Trắng",
                  sub_bold: bool = True, sub_italic: bool = False):
@@ -240,6 +241,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
         self.do_merge = do_merge
         self.crf = crf
         self.ffpreset = preset
+        self.merge_concurrency = max(1, min(2, merge_concurrency))
         self.encode_threads = max(1, encode_threads)
         self.sub_font = sub_font
         self.sub_size = sub_size
@@ -437,21 +439,13 @@ class XSDownloadMergeWorker(QtCore.QThread):
             ep.sub_path, self.sub_font, self.sub_size, ass_path=tmp_ass_path
         )
         if sub_for_ffmpeg == ep.sub_path:
-            if ep.sub_path.suffix.lower() == ".txt":
-                shutil.copy2(ep.video_path, out_path)
-                ep.merged_path = out_path
-                ep.merge_note = "no_sub"
-                ep.status = "done"
-                self.episode_status.emit(ep.episode, "done", self.instance_id)
-                self.log(f"tập {ep.episode}: file .txt không có subtitle hợp lệ -- copy video vào merged/")
-                return True
-
-            tmp_sub_path = tmp_sub_dir / f"{base}{ep.sub_path.suffix.lower() or '.txt'}"
-            try:
-                shutil.copy2(ep.sub_path, tmp_sub_path)
-                sub_for_ffmpeg = tmp_sub_path
-            except Exception as e:
-                self.log(f"không chuẩn hóa được sub tập {ep.episode}: {e}")
+            shutil.copy2(ep.video_path, out_path)
+            ep.merged_path = out_path
+            ep.merge_note = "no_sub"
+            ep.status = "done"
+            self.episode_status.emit(ep.episode, "done", self.instance_id)
+            self.log(f"tập {ep.episode}: subtitle không hợp lệ hoặc rỗng -- copy video vào merged/")
+            return True
 
         sub_filter = _ns_escape_path(sub_for_ffmpeg)
 
@@ -634,11 +628,28 @@ class XSDownloadMergeWorker(QtCore.QThread):
             if not self._get_ffmpeg_path():
                 self.log("CẢNH BÁO: không tìm thấy ffmpeg -- bỏ qua merge.")
             else:
-                for ep in selected:
-                    if self._stop.is_set():
-                        break
-                    if ep.status == "downloaded" and ep.video_path and ep.video_path.exists():
-                        ok = self._merge_episode(ep)
+                merge_items = [
+                    ep for ep in selected
+                    if ep.status == "downloaded" and ep.video_path and ep.video_path.exists()
+                ]
+                if merge_items:
+                    self.log(f"Luồng merge: {self.merge_concurrency}")
+                with ThreadPoolExecutor(max_workers=self.merge_concurrency) as pool:
+                    futures = {pool.submit(self._merge_episode, ep): ep for ep in merge_items}
+                    for future in as_completed(futures):
+                        if self._stop.is_set():
+                            for f in futures:
+                                f.cancel()
+                            break
+                        ep = futures[future]
+                        try:
+                            ok = future.result()
+                        except Exception as e:
+                            ok = False
+                            ep.status = "error"
+                            ep.merge_note = "error"
+                            ep.error_msg = str(e)
+                            self.episode_status.emit(ep.episode, "error", self.instance_id)
                         if ok:
                             done += 1
                             if ep.merge_note.startswith("skip:"):

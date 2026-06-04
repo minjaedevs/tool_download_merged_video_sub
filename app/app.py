@@ -78,20 +78,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         tab_widget.addTab(xs_tab, "XemShort")
 
         # Tab 2: M3U8 Downloader
-        m3u8_tab = M3U8Tab()
-        tab_widget.addTab(m3u8_tab, "M3U8")
+        # m3u8_tab = M3U8Tab()
+        # tab_widget.addTab(m3u8_tab, "M3U8")
 
-        # Tab 3: M3U8 Pro Downloader
-        m3u8_pro_tab = M3U8ProTab()
-        tab_widget.addTab(m3u8_pro_tab, "M3U8 Pro")
+        # # Tab 3: M3U8 Pro Downloader
+        # m3u8_pro_tab = M3U8ProTab()
+        # tab_widget.addTab(m3u8_pro_tab, "M3U8 Pro")
 
-        # Tab 4: kkphim1 API Downloader
-        kkphim_tab = KkPhimTab()
-        tab_widget.addTab(kkphim_tab, "kkphim1")
+        # # Tab 4: kkphim1 API Downloader
+        # kkphim_tab = KkPhimTab()
+        # tab_widget.addTab(kkphim_tab, "kkphim1")
 
-        # Tab 5: nguonc API Downloader
-        nguonc_tab = NguoncTab()
-        tab_widget.addTab(nguonc_tab, "nguonc")
+        # # Tab 5: nguonc API Downloader
+        # nguonc_tab = NguoncTab()
+        # tab_widget.addTab(nguonc_tab, "nguonc")
 
         tab_widget.setCurrentIndex(0)  # default to XemShort
         self.setCentralWidget(tab_widget)

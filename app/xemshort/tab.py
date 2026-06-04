@@ -67,6 +67,7 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_sub_checkbox.setChecked(s.value("download_sub", True, type=bool))
         self.ns_merge_checkbox.setChecked(s.value("do_merge", True, type=bool))
         self.ns_crf_spin.setValue(int(s.value("crf", 20)))
+        self.ns_merge_threads_spin.setValue(int(s.value("merge_threads", 1)))
         self.ns_encode_threads_spin.setValue(int(s.value("encode_threads", 3)))
         self.ns_sub_font_combo.setCurrentText(s.value("sub_font", "UTM Alter Gothic"))
         self.ns_sub_size_spin.setValue(int(s.value("sub_size", 15)))
@@ -83,6 +84,7 @@ class XemShortTab(QtWidgets.QWidget):
         s.setValue("download_sub", self.ns_sub_checkbox.isChecked())
         s.setValue("do_merge", self.ns_merge_checkbox.isChecked())
         s.setValue("crf", self.ns_crf_spin.value())
+        s.setValue("merge_threads", self.ns_merge_threads_spin.value())
         s.setValue("encode_threads", self.ns_encode_threads_spin.value())
         s.setValue("sub_font", self.ns_sub_font_combo.currentText())
         s.setValue("sub_size", self.ns_sub_size_spin.value())
@@ -90,6 +92,32 @@ class XemShortTab(QtWidgets.QWidget):
         s.setValue("sub_color", self.ns_sub_color_combo.currentText())
         s.setValue("sub_bold", self.ns_sub_bold_cb.isChecked())
         s.setValue("sub_italic", self.ns_sub_italic_cb.isChecked())
+
+    def _connect_settings_autosave(self):
+        """Persist XemShort options whenever the user changes them."""
+        for edit in (self.ns_save_dir_edit, self.ns_api_url_edit):
+            edit.textChanged.connect(lambda *_: self._save_settings())
+
+        for spin in (
+            self.ns_concurrency_spin,
+            self.ns_crf_spin,
+            self.ns_merge_threads_spin,
+            self.ns_encode_threads_spin,
+            self.ns_sub_size_spin,
+            self.ns_sub_margin_v_spin,
+        ):
+            spin.valueChanged.connect(lambda *_: self._save_settings())
+
+        for checkbox in (
+            self.ns_sub_checkbox,
+            self.ns_merge_checkbox,
+            self.ns_sub_bold_cb,
+            self.ns_sub_italic_cb,
+        ):
+            checkbox.toggled.connect(lambda *_: self._save_settings())
+
+        for combo in (self.ns_sub_font_combo, self.ns_sub_color_combo):
+            combo.currentTextChanged.connect(lambda *_: self._save_settings())
 
     # ── UI builder ──────────────────────────────────────────────────────────
 
@@ -120,7 +148,7 @@ class XemShortTab(QtWidgets.QWidget):
         cfg_layout.addRow("API endpoint:", self.ns_api_url_edit)
 
         opts = QtWidgets.QHBoxLayout()
-        opts.addWidget(QtWidgets.QLabel("Luồng:"))
+        opts.addWidget(QtWidgets.QLabel("Luồng tải:"))
         self.ns_concurrency_spin = QtWidgets.QSpinBox()
         self.ns_concurrency_spin.setRange(1, 16)
         self.ns_concurrency_spin.setValue(4)
@@ -140,7 +168,17 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_crf_spin.setToolTip("CRF: 18=chất lượng cao/file lớn, 20=chất lượng cao (mặc định), 32=file nhỏ")
         opts.addWidget(self.ns_crf_spin)
         opts.addSpacing(10)
-        opts.addWidget(QtWidgets.QLabel("Threads encode:"))
+        opts.addWidget(QtWidgets.QLabel("Luồng merge:"))
+        self.ns_merge_threads_spin = QtWidgets.QSpinBox()
+        self.ns_merge_threads_spin.setRange(1, 2)
+        self.ns_merge_threads_spin.setValue(1)
+        self.ns_merge_threads_spin.setToolTip(
+            "Số tập merge cùng lúc.\n"
+            "1 = ổn định, ít tải CPU/GPU.\n"
+            "2 = nhanh hơn nếu máy đủ khỏe.")
+        opts.addWidget(self.ns_merge_threads_spin)
+        opts.addSpacing(10)
+        opts.addWidget(QtWidgets.QLabel("Luồng mỗi video:"))
         self.ns_encode_threads_spin = QtWidgets.QSpinBox()
         self.ns_encode_threads_spin.setRange(1, 32)
         self.ns_encode_threads_spin.setValue(3)
@@ -372,6 +410,7 @@ class XemShortTab(QtWidgets.QWidget):
         # ── Finalise ─────────────────────────────────────────────────────────
         self._load_settings()
         self._check_ffmpeg()
+        self._connect_settings_autosave()
 
     def _check_ffmpeg(self):
         if not _ns_check_ffmpeg():
@@ -812,6 +851,7 @@ class XemShortTab(QtWidgets.QWidget):
             do_merge=self.ns_merge_checkbox.isChecked(),
             crf=self.ns_crf_spin.value(),
             preset="fast",
+            merge_concurrency=self.ns_merge_threads_spin.value(),
             encode_threads=self.ns_encode_threads_spin.value(),
             sub_font=self.ns_sub_font_combo.currentText(),
             sub_size=self.ns_sub_size_spin.value(),

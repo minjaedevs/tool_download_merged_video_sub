@@ -1430,18 +1430,19 @@ class M3U8ProTab(M3U8Tab):
         self._cfg_fragments.currentTextChanged.connect(lambda *_: self._save_settings())
         lay.addWidget(self._cfg_fragments)
 
-        lay.addWidget(QtWidgets.QLabel("Output:"))
+        lay.addWidget(QtWidgets.QLabel("Lưu thành:"))
         self._cfg_container = QtWidgets.QComboBox()
-        self._cfg_container.addItem("MP4", "mp4")
-        self._cfg_container.addItem("TS nhanh", "ts")
-        self._cfg_container.addItem("M3U8", "m3u8")
-        self._cfg_container.setFixedWidth(105)
+        self._cfg_container.addItem("MP4 (video)", "mp4")
+        self._cfg_container.addItem("TS (nhanh)", "ts")
+        self._cfg_container.addItem("M3U8 (chỉ lưu playlist)", "m3u8")
+        self._cfg_container.setFixedWidth(165)
         self._cfg_container.setToolTip(
-            "MP4/TS tải video; M3U8 chỉ lưu playlist nguồn. "
-            "TS nhanh bỏ bước Fixup MP4; MP4 tương thích hơn nhưng có thể chậm hơn"
+            "MP4: tải video thật, merge thành .mp4 (tương thích cao)\n"
+            "TS: tải nhanh, lưu .ts (có thể không tương thích với một số player)\n"
+            "M3U8: chỉ lưu playlist text — KHÔNG phải video"
         )
         self._cfg_container.setStyleSheet(self._cfg_fragments.styleSheet())
-        self._cfg_container.currentIndexChanged.connect(lambda *_: self._save_settings())
+        self._cfg_container.currentIndexChanged.connect(self._on_container_mode_changed)
         lay.addWidget(self._cfg_container)
 
         return grp
@@ -1464,6 +1465,31 @@ class M3U8ProTab(M3U8Tab):
         mode = str(s.value("container_mode", "mp4"))
         idx = self._cfg_container.findData(mode)
         self._cfg_container.setCurrentIndex(idx if idx >= 0 else 0)
+
+    def _on_container_mode_changed(self):
+        """Warn user when they switch to M3U8-only mode."""
+        self._save_settings()
+        if self._cfg_container.currentData() == "m3u8":
+            # Defer so the combobox event is fully processed first
+            QtCore.QTimer.singleShot(50, self._show_m3u8_warning)
+
+    def _show_m3u8_warning(self):
+        """Show a single warning + offer to switch when M3U8 mode is selected."""
+        reply = QtWidgets.QMessageBox.warning(
+            self,
+            "Chế độ M3U8 — Chỉ lưu playlist",
+            "⚠️  Bạn đang chọn 'M3U8 (chỉ lưu playlist)'.\n\n"
+            "File output sẽ là playlist M3U8 (.m3u8) — đây KHÔNG phải video.\n"
+            "Không thể phát trực tiếp bằng VLC/player.\n\n"
+            "Để tải video thật, chọn 'MP4 (video)' hoặc 'TS (nhanh)'.\n\n"
+            "Bạn có muốn chuyển sang 'MP4 (video)' không?",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.Yes,
+        )
+        if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+            idx = self._cfg_container.findData("mp4")
+            if idx >= 0:
+                self._cfg_container.setCurrentIndex(idx)
 
     def _save_settings(self):
         """Persist M3U8 Pro settings."""
@@ -1511,5 +1537,5 @@ class M3U8ProTab(M3U8Tab):
         self._update_action_buttons()
         self._log(
             f"[{item.name}] Bắt đầu tải bằng yt-dlp -N {self._cfg_fragments.currentText()} "
-            f"({self._cfg_container.currentText()})..."
+            f"(output={self._cfg_container.currentData()})..."
         )

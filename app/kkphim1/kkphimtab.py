@@ -560,5 +560,5 @@ class KkPhimTab(M3U8ProTab):
         self._update_action_buttons()
         self._log(
             f"[{item.name}] Bắt đầu tải kkphim1 bằng yt-dlp -N {self._cfg_fragments.currentText()} "
-            f"({self._cfg_container.currentText()})..."
+            f"(output={self._cfg_container.currentData()})..."
         )
