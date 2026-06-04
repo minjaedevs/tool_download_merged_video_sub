@@ -194,7 +194,7 @@ class Ui_MainWindow(object):
     # setupUi
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Tool Download Movie Pro", None))
+        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Tool Movie XemShort", None))
         self.action_about.setText(QCoreApplication.translate("MainWindow", u"About", None))
         self.action_help.setText(QCoreApplication.translate("MainWindow", u"Huong dan su dung", None))
         self.action_exit.setText(QCoreApplication.translate("MainWindow", u"Exit", None))
@@ -231,4 +231,3 @@ class Ui_MainWindow(object):
         self.menuHelp.setTitle(QCoreApplication.translate("MainWindow", u"Help", None))
         self.menuEdit.setTitle(QCoreApplication.translate("MainWindow", u"Edit", None))
     # retranslateUi
-

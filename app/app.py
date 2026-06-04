@@ -1,5 +1,5 @@
 """
-Tool Download Movie Pro - XemShort downloader.
+Tool Movie XemShort - XemShort downloader.
 
 Supports:
   - XemShort mode: fetch episodes by movie_id, parallel download, hardcode sub + crop overlay
@@ -75,7 +75,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # Tab 1: XemShort
         xs_tab = XemShortTab()
-        tab_widget.addTab(xs_tab, "XemShort")
+        tab_widget.addTab(xs_tab, "NetShort")
 
         # Tab 2: M3U8 Downloader
         # m3u8_tab = M3U8Tab()
@@ -140,8 +140,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """Display the About dialog with version and project info."""
         QtWidgets.QMessageBox.about(
             self,
-            "About Tool Download Movie Pro",
-            f"Tool Download Movie Pro {__version__}<br><br>"
+            "About Tool Movie XemShort",
+            f"Tool Movie XemShort {__version__}<br><br>"
             "Phần mềm tải phim, video từ nhiều nguồn.<br>"
             "Hỗ trợ XemShort mode (tải phim từ xemshort.top) và M3U8 mode.",
         )
@@ -149,7 +149,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def show_help(self):
         """Display the usage guide dialog."""
         help_text = (
-            "<b>Hướng dẫn sử dụng Tool Download Movie Pro</b><br><br>"
+            "<b>Hướng dẫn sử dụng Tool Movie XemShort</b><br><br>"
             "<b>1. Chế độ XemShort (mặc định):</b><br>"
             "- Truy cập <a href='https://xemshort.top'>https://xemshort.top</a><br>"
             "- Tìm phim muốn tải, mở trang phim<br>"
@@ -224,15 +224,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def _check_first_launch(self):
         """Show a welcome dialog on first launch only (once per installation)."""
-        s = QSettings("Tool Download Movie Pro", "AppSettings")
+        s = QSettings("Tool Movie XemShort", "AppSettings")
         if s.value("first_launch_done", False, type=bool):
             return
         s.setValue("first_launch_done", True)
         greeting = _get_time_greeting()
         QtWidgets.QMessageBox.information(
             self,
-            "Tool Download Movie Pro",
-            f"Chào bạn! Đã quay trở lại với Tool Download Movie Pro.\n\n"
+            "Tool Movie XemShort",
+            f"Chào bạn! Đã quay trở lại với Tool Movie XemShort.\n\n"
             f"Bạn đang sử dụng phiên bản {__version__}.\n"
             f"Chúc bạn một ngày làm việc hiệu quả!",
         )
@@ -245,7 +245,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    app.setApplicationName("Tool Download Movie Pro")
+    app.setApplicationName("Tool Movie XemShort")
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
