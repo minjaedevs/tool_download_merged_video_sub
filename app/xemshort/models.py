@@ -27,6 +27,7 @@ class XSEpisode:
     video_path: Optional[Path] = None
     sub_path: Optional[Path] = None
     merged_path: Optional[Path] = None
+    m3u8_path: Optional[Path] = None
     status: str = "pending"
     error_msg: str = ""
     merge_note: str = ""   # "ok" | "no_sub" | "dur:+Xs" | "error"

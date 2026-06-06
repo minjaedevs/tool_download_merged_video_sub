@@ -58,6 +58,17 @@ class XemShortTab(QtWidgets.QWidget):
     def settings(self) -> QSettings:
         return QSettings(_XS_APP_NAME, _XS_CONFIG_KEY)
 
+    @staticmethod
+    def _setting_bool(settings: QSettings, key: str, default: bool) -> bool:
+        value = settings.value(key, default)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return bool(value)
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return default
+
     def _load_settings(self):
         s = self.settings()
         self.ns_save_dir_edit.setText(
@@ -65,8 +76,10 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_api_url_edit.setText(
             s.value("api_url", DEFAULT_API_URL))
         self.ns_concurrency_spin.setValue(int(s.value("concurrency", 4)))
-        self.ns_sub_checkbox.setChecked(s.value("download_sub", True, type=bool))
-        self.ns_merge_checkbox.setChecked(s.value("do_merge", True, type=bool))
+        self.ns_sub_checkbox.setChecked(self._setting_bool(s, "download_sub", True))
+        self.ns_merge_checkbox.setChecked(self._setting_bool(s, "do_merge", True))
+        self.ns_m3u8_checkbox.setChecked(self._setting_bool(s, "convert_m3u8", False))
+        self.ns_m3u8_reencode_checkbox.setChecked(self._setting_bool(s, "m3u8_reencode", False))
         self.ns_crf_spin.setValue(int(s.value("crf", 20)))
         self.ns_merge_threads_spin.setValue(int(s.value("merge_threads", 1)))
         self.ns_encode_threads_spin.setValue(int(s.value("encode_threads", 3)))
@@ -74,16 +87,18 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_sub_size_spin.setValue(int(s.value("sub_size", 15)))
         self.ns_sub_margin_v_spin.setValue(int(s.value("sub_margin_v", 70)))
         self.ns_sub_color_combo.setCurrentText(s.value("sub_color", "Trắng"))
-        self.ns_sub_bold_cb.setChecked(s.value("sub_bold", True, type=bool))
-        self.ns_sub_italic_cb.setChecked(s.value("sub_italic", False, type=bool))
+        self.ns_sub_bold_cb.setChecked(self._setting_bool(s, "sub_bold", True))
+        self.ns_sub_italic_cb.setChecked(self._setting_bool(s, "sub_italic", False))
 
     def _save_settings(self):
         s = self.settings()
         s.setValue("save_dir", self.ns_save_dir_edit.text())
         s.setValue("api_url", self.ns_api_url_edit.text())
         s.setValue("concurrency", self.ns_concurrency_spin.value())
-        s.setValue("download_sub", self.ns_sub_checkbox.isChecked())
-        s.setValue("do_merge", self.ns_merge_checkbox.isChecked())
+        s.setValue("download_sub", int(self.ns_sub_checkbox.isChecked()))
+        s.setValue("do_merge", int(self.ns_merge_checkbox.isChecked()))
+        s.setValue("convert_m3u8", int(self.ns_m3u8_checkbox.isChecked()))
+        s.setValue("m3u8_reencode", int(self.ns_m3u8_reencode_checkbox.isChecked()))
         s.setValue("crf", self.ns_crf_spin.value())
         s.setValue("merge_threads", self.ns_merge_threads_spin.value())
         s.setValue("encode_threads", self.ns_encode_threads_spin.value())
@@ -91,8 +106,9 @@ class XemShortTab(QtWidgets.QWidget):
         s.setValue("sub_size", self.ns_sub_size_spin.value())
         s.setValue("sub_margin_v", self.ns_sub_margin_v_spin.value())
         s.setValue("sub_color", self.ns_sub_color_combo.currentText())
-        s.setValue("sub_bold", self.ns_sub_bold_cb.isChecked())
-        s.setValue("sub_italic", self.ns_sub_italic_cb.isChecked())
+        s.setValue("sub_bold", int(self.ns_sub_bold_cb.isChecked()))
+        s.setValue("sub_italic", int(self.ns_sub_italic_cb.isChecked()))
+        s.sync()
 
     def _connect_settings_autosave(self):
         """Persist XemShort options whenever the user changes them."""
@@ -112,6 +128,8 @@ class XemShortTab(QtWidgets.QWidget):
         for checkbox in (
             self.ns_sub_checkbox,
             self.ns_merge_checkbox,
+            self.ns_m3u8_checkbox,
+            self.ns_m3u8_reencode_checkbox,
             self.ns_sub_bold_cb,
             self.ns_sub_italic_cb,
         ):
@@ -161,6 +179,19 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_merge_checkbox = QtWidgets.QCheckBox("Hardcode sub (merge)")
         self.ns_merge_checkbox.setChecked(True)
         opts.addWidget(self.ns_merge_checkbox)
+        self.ns_m3u8_checkbox = QtWidgets.QCheckBox("Convert M3U8")
+        self.ns_m3u8_checkbox.setChecked(False)
+        self.ns_m3u8_checkbox.setToolTip(
+            "Sau khi merge, tao thu muc m3u8 cung cap voi merged.\n"
+            "Moi tap se co thu muc ep01, ep02... chua index.m3u8 va segment .ts.\n"
+            "Neu trung ten se tao ep01 1, ep01 2 theo kieu Windows.")
+        opts.addWidget(self.ns_m3u8_checkbox)
+        self.ns_m3u8_reencode_checkbox = QtWidgets.QCheckBox("M3U8 keyframe")
+        self.ns_m3u8_reencode_checkbox.setChecked(False)
+        self.ns_m3u8_reencode_checkbox.setToolTip(
+            "Production HLS: re-encode video va force keyframe moi 6 giay.\n"
+            "Cham hon nhung segment doc lap/on dinh hon. Mac dinh tat de convert nhanh.")
+        opts.addWidget(self.ns_m3u8_reencode_checkbox)
         opts.addSpacing(10)
         opts.addWidget(QtWidgets.QLabel("CRF:"))
         self.ns_crf_spin = QtWidgets.QSpinBox()
@@ -862,12 +893,15 @@ class XemShortTab(QtWidgets.QWidget):
         self._ns_set_status(row, "Running...")
 
         self._ns_block_movie_btns(row, True)
+        self._save_settings()
 
         worker = XSDownloadMergeWorker(
             movie,
             concurrency=self.ns_concurrency_spin.value(),
             download_sub=self.ns_sub_checkbox.isChecked(),
             do_merge=self.ns_merge_checkbox.isChecked(),
+            convert_m3u8=self.ns_m3u8_checkbox.isChecked(),
+            m3u8_reencode=self.ns_m3u8_reencode_checkbox.isChecked(),
             crf=self.ns_crf_spin.value(),
             preset="fast",
             merge_concurrency=self.ns_merge_threads_spin.value(),

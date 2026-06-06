@@ -1124,9 +1124,9 @@ class M3U8Tab(QtWidgets.QWidget):
             logger.debug(f"Worker {instance_id} finished but item is already gone, ignoring.")
             return
 
-        # Clean up worker reference
-        if item.id in self.workers:
-            del self.workers[item.id]
+        worker = self.workers.get(item.id)
+        if worker is not None:
+            self._cleanup_worker_when_stopped(item.id, worker)
 
         item.status = "done" if success else "error"
         item.error_msg = error_msg
@@ -1170,6 +1170,20 @@ class M3U8Tab(QtWidgets.QWidget):
                     self._batch_remaining += 1
 
         self._maybe_show_done_dialog()
+
+    def _cleanup_worker_when_stopped(self, item_id: int, worker: QtCore.QThread):
+        """Drop the worker reference only after Qt reports that the thread has stopped."""
+        if worker.isRunning():
+            QtCore.QTimer.singleShot(
+                100,
+                lambda item_id=item_id, worker=worker: self._cleanup_worker_when_stopped(
+                    item_id, worker
+                ),
+            )
+            return
+        if self.workers.get(item_id) is worker:
+            del self.workers[item_id]
+        worker.deleteLater()
 
     def _on_worker_output_ready(self, instance_id: int, output_path: str):
         """Store the resolved output file path and refresh the actions cell."""

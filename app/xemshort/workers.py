@@ -232,13 +232,17 @@ class XSDownloadMergeWorker(QtCore.QThread):
                  merge_concurrency: int = 1,
                  sub_font: str = "UTM Alter Gothic", sub_size: int = 20,
                  sub_margin_v: int = 30, sub_color: str = "Trắng",
-                 sub_bold: bool = True, sub_italic: bool = False):
+                 sub_bold: bool = True, sub_italic: bool = False,
+                 convert_m3u8: bool = False,
+                 m3u8_reencode: bool = False):
         """Configure worker with movie data, thread count, and ffmpeg encode settings."""
         super().__init__()
         self.movie = movie
         self.concurrency = concurrency
         self.download_sub = download_sub
         self.do_merge = do_merge
+        self.convert_m3u8 = convert_m3u8
+        self.m3u8_reencode = m3u8_reencode
         self.crf = crf
         self.ffpreset = preset
         self.merge_concurrency = max(1, min(2, merge_concurrency))
@@ -287,6 +291,56 @@ class XSDownloadMergeWorker(QtCore.QThread):
             "preset":   self.ffpreset,
         }
 
+    def _episode_base_name(self, ep: XSEpisode) -> str:
+        padding = len(str(self.movie.total))
+        return f"ep{str(ep.episode).zfill(padding)}"
+
+    def _episode_m3u8_dir_name(self, ep: XSEpisode) -> str:
+        return self._episode_base_name(ep)
+
+    @staticmethod
+    def _is_valid_hls_dir(out_dir: Path) -> bool:
+        playlist = out_dir / "index.m3u8"
+        if not playlist.exists() or playlist.stat().st_size <= 128:
+            return False
+        try:
+            lines = playlist.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception:
+            return False
+        segment_names = [
+            line.strip()
+            for line in lines
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        if not segment_names:
+            return False
+        for name in segment_names:
+            if "://" in name or name.startswith("/"):
+                continue
+            if not (out_dir / name).exists():
+                return False
+        return any(out_dir.glob("seg_*.ts"))
+
+    def _prepare_m3u8_dir(self, ep: XSEpisode) -> tuple[Path, bool]:
+        root = self.movie.save_dir / self.movie.folder_name / "m3u8"
+        root.mkdir(parents=True, exist_ok=True)
+        base = self._episode_m3u8_dir_name(ep)
+        index = 0
+        while True:
+            suffix = "" if index == 0 else f" {index}"
+            out_dir = root / f"{base}{suffix}"
+            if not out_dir.exists():
+                out_dir.mkdir(parents=True, exist_ok=False)
+                return out_dir, False
+            if out_dir.is_dir() and not self._is_valid_hls_dir(out_dir):
+                shutil.rmtree(out_dir, ignore_errors=True)
+                out_dir.mkdir(parents=True, exist_ok=False)
+                return out_dir, False
+            if out_dir.is_dir() and self._is_valid_hls_dir(out_dir):
+                index += 1
+                continue
+            index += 1
+
     def _download_file(self, url: str, output: Path, desc: str, retries: int = 3) -> bool:
         """Download a URL to a file with retry logic; skip if file already exists."""
         if output.exists() and output.stat().st_size > 1024:
@@ -333,8 +387,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
         folder = self.movie.save_dir / self.movie.folder_name
         folder.mkdir(parents=True, exist_ok=True)
 
-        padding = len(str(self.movie.total))
-        base = f"ep{str(ep.episode).zfill(padding)}"
+        base = self._episode_base_name(ep)
 
         video_path = folder / f"{base}.mp4"
 
@@ -391,8 +444,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
         merge_dir = self.movie.save_dir / self.movie.folder_name / "merged"
         merge_dir.mkdir(parents=True, exist_ok=True)
 
-        padding = len(str(self.movie.total))
-        base = f"ep{str(ep.episode).zfill(padding)}"
+        base = self._episode_base_name(ep)
         out_path = merge_dir / f"{base}_merged.mp4"
 
         if not ep.sub_path or not ep.sub_path.exists():
@@ -584,6 +636,130 @@ class XSDownloadMergeWorker(QtCore.QThread):
             self.episode_status.emit(ep.episode, "error", self.instance_id)
             return False
 
+    def _convert_episode_to_m3u8(self, ep: XSEpisode) -> bool:
+        """Package a finished episode as VOD HLS under movie/m3u8/{episode}/."""
+        if self._stop.is_set():
+            return False
+
+        input_path = ep.merged_path if self.do_merge and ep.merged_path else ep.video_path
+        if not input_path or not input_path.exists():
+            ep.error_msg = "missing input for m3u8"
+            ep.status = "error"
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
+            self.log(f"m3u8 tap {ep.episode}: khong tim thay file input")
+            return False
+
+        ffmpeg_path = self._get_ffmpeg_path()
+        if not ffmpeg_path:
+            ep.error_msg = "ffmpeg not found"
+            ep.status = "error"
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
+            self.log("ffmpeg not found!")
+            return False
+
+        out_dir, _ = self._prepare_m3u8_dir(ep)
+        playlist_path = out_dir / "index.m3u8"
+        segment_pattern = out_dir / "seg_%05d.ts"
+
+        setattr(ep, "_m3u8_skipped", False)
+        if self._is_valid_hls_dir(out_dir):
+            ep.m3u8_path = playlist_path
+            ep.status = "done"
+            setattr(ep, "_m3u8_skipped", True)
+            self.episode_status.emit(ep.episode, "done", self.instance_id)
+            self.log(f"m3u8 tap {ep.episode} SKIP (da ton tai)")
+            return True
+
+        self.episode_status.emit(ep.episode, "m3u8", self.instance_id)
+        self.log(f"m3u8 tap {ep.episode}: {input_path.name} -> {playlist_path}")
+
+        import subprocess as sp
+        import platform as _platform
+
+        cmd = [
+            str(ffmpeg_path), "-y",
+            "-i", str(input_path),
+            "-map", "0:v:0",
+            "-map", "0:a:0?",
+        ]
+        if self.m3u8_reencode:
+            cmd += [
+                "-c:v", "libx264",
+                "-preset", self.ffpreset,
+                "-crf", str(self.crf),
+                "-force_key_frames", "expr:gte(t,n_forced*6)",
+                "-sc_threshold", "0",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-ar", "48000",
+                "-ac", "2",
+            ]
+        else:
+            cmd += [
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-ar", "48000",
+                "-ac", "2",
+            ]
+        hls_flags = "independent_segments+temp_file" if self.m3u8_reencode else "temp_file"
+        cmd += [
+            "-f", "hls",
+            "-hls_time", "6",
+            "-hls_playlist_type", "vod",
+            "-hls_flags", hls_flags,
+            "-hls_segment_type", "mpegts",
+            "-hls_segment_filename", str(segment_pattern),
+            "-loglevel", "warning",
+            str(playlist_path),
+        ]
+
+        if _platform.system() == "Windows":
+            _BELOW_NORMAL = 0x00004000
+            _cflags = {"creationflags": sp.CREATE_NO_WINDOW | _BELOW_NORMAL}
+        else:
+            _cflags = {}
+
+        try:
+            result = sp.run(
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=3600, **_cflags
+            )
+            if result.stderr.strip():
+                self.log(f"ffmpeg m3u8 warning tap {ep.episode}: {result.stderr[:300]}")
+            if result.returncode != 0:
+                self.log(f"ffmpeg m3u8 loi tap {ep.episode}: {result.stderr[:500]}")
+                ep.error_msg = "ffmpeg m3u8 failed"
+                ep.status = "error"
+                self.episode_status.emit(ep.episode, "error", self.instance_id)
+                shutil.rmtree(out_dir, ignore_errors=True)
+                return False
+            if not self._is_valid_hls_dir(out_dir):
+                ep.error_msg = "m3u8 output missing"
+                ep.status = "error"
+                self.episode_status.emit(ep.episode, "error", self.instance_id)
+                shutil.rmtree(out_dir, ignore_errors=True)
+                return False
+            ep.m3u8_path = playlist_path
+            ep.status = "done"
+            self.episode_status.emit(ep.episode, "done", self.instance_id)
+            self.log(f"m3u8 tap {ep.episode} OK -> {playlist_path}")
+            return True
+        except sp.TimeoutExpired:
+            ep.error_msg = "m3u8 timeout"
+            ep.status = "error"
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
+            self.log(f"m3u8 tap {ep.episode} TIMEOUT")
+            shutil.rmtree(out_dir, ignore_errors=True)
+            return False
+        except Exception as e:
+            ep.error_msg = str(e)
+            ep.status = "error"
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
+            self.log(f"m3u8 tap {ep.episode} exception: {e}")
+            shutil.rmtree(out_dir, ignore_errors=True)
+            return False
+
     def run(self):
         """Entry point: download all selected episodes in parallel, then merge sequentially."""
         selected = [e for e in self.movie.episodes if e.selected]
@@ -596,6 +772,8 @@ class XSDownloadMergeWorker(QtCore.QThread):
         self.movie.start_time = time.time()
         self.log(f"=== Bắt đầu tải & merge '{self.movie.name}' ({total} tập) ===")
         self.log(f"Thư mục: {self.movie.save_dir / self.movie.folder_name}")
+        phase_count = 1 + int(self.do_merge) + int(self.convert_m3u8)
+        grand_total = total * phase_count
         done = 0
         dl_ok = 0
         dl_fail = 0
@@ -616,7 +794,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
                     dl_ok += 1
                 else:
                     dl_fail += 1
-                self.progress.emit(done, total * (2 if self.do_merge else 1), self.instance_id)
+                self.progress.emit(done, grand_total, self.instance_id)
 
         if self._stop.is_set():
             self.log("Đã dừng.")
@@ -661,11 +839,54 @@ class XSDownloadMergeWorker(QtCore.QThread):
                                 merge_ok += 1
                         else:
                             merge_fail += 1
-                        self.progress.emit(done, total * 2, self.instance_id)
+                        self.progress.emit(done, grand_total, self.instance_id)
 
         # Summary log — actual new downloads vs already-present skips
+        m3u8_ok = 0
+        m3u8_skip = 0
+        m3u8_fail = 0
+
+        if self.convert_m3u8:
+            if not self._get_ffmpeg_path():
+                self.log("CANH BAO: khong tim thay ffmpeg -- bo qua convert m3u8.")
+            else:
+                if self.do_merge:
+                    m3u8_items = [
+                        ep for ep in selected
+                        if ep.status == "done" and ep.merged_path and ep.merged_path.exists()
+                    ]
+                else:
+                    m3u8_items = [
+                        ep for ep in selected
+                        if ep.status == "downloaded" and ep.video_path and ep.video_path.exists()
+                    ]
+                if m3u8_items:
+                    self.log("Bat dau convert M3U8 production...")
+                for ep in m3u8_items:
+                    if self._stop.is_set():
+                        break
+                    ok = self._convert_episode_to_m3u8(ep)
+                    if ok:
+                        done += 1
+                        if getattr(ep, "_m3u8_skipped", False):
+                            m3u8_skip += 1
+                        else:
+                            m3u8_ok += 1
+                    else:
+                        m3u8_fail += 1
+                    self.progress.emit(done, grand_total, self.instance_id)
+
         actual_dl = dl_ok - merge_skip  # episodes actually downloaded (not already-done skips)
         dl_summary = f"Tải: {actual_dl} mới" + (f", {dl_fail} lỗi" if dl_fail else "")
+        if self.convert_m3u8:
+            m3u8_parts = []
+            if m3u8_ok:
+                m3u8_parts.append(f"{m3u8_ok} moi")
+            if m3u8_skip:
+                m3u8_parts.append(f"{m3u8_skip} da co")
+            if m3u8_fail:
+                m3u8_parts.append(f"{m3u8_fail} loi")
+            self.log("[Ket qua M3U8] " + (", ".join(m3u8_parts) if m3u8_parts else "0"))
         if self.do_merge:
             merge_parts = []
             if merge_ok:
@@ -680,7 +901,6 @@ class XSDownloadMergeWorker(QtCore.QThread):
             self.log(f"[Kết quả] {dl_summary}")
 
         # Always finish at 100%
-        grand_total = total * (2 if self.do_merge else 1)
         self.progress.emit(grand_total, grand_total, self.instance_id)
 
         self.movie.end_time = time.time()

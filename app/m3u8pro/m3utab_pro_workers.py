@@ -158,6 +158,7 @@ class YtDlpM3U8DownloadWorker(M3U8DownloadWorker):
             str(yt_dlp_path),
             "--newline",
             "--no-warnings",
+            "--enable-file-urls",
             "--retries", "10",
             "--fragment-retries", "10",
             "--concurrent-fragments", str(self.fragments),
