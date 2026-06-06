@@ -78,8 +78,8 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_concurrency_spin.setValue(int(s.value("concurrency", 4)))
         self.ns_sub_checkbox.setChecked(self._setting_bool(s, "download_sub", True))
         self.ns_merge_checkbox.setChecked(self._setting_bool(s, "do_merge", True))
-        self.ns_m3u8_checkbox.setChecked(self._setting_bool(s, "convert_m3u8", False))
-        self.ns_m3u8_reencode_checkbox.setChecked(self._setting_bool(s, "m3u8_reencode", False))
+        self.ns_m3u8_checkbox.setChecked(False)
+        self.ns_m3u8_reencode_checkbox.setChecked(False)
         self.ns_crf_spin.setValue(int(s.value("crf", 20)))
         self.ns_merge_threads_spin.setValue(int(s.value("merge_threads", 1)))
         self.ns_encode_threads_spin.setValue(int(s.value("encode_threads", 3)))
@@ -97,8 +97,8 @@ class XemShortTab(QtWidgets.QWidget):
         s.setValue("concurrency", self.ns_concurrency_spin.value())
         s.setValue("download_sub", int(self.ns_sub_checkbox.isChecked()))
         s.setValue("do_merge", int(self.ns_merge_checkbox.isChecked()))
-        s.setValue("convert_m3u8", int(self.ns_m3u8_checkbox.isChecked()))
-        s.setValue("m3u8_reencode", int(self.ns_m3u8_reencode_checkbox.isChecked()))
+        s.remove("convert_m3u8")
+        s.remove("m3u8_reencode")
         s.setValue("crf", self.ns_crf_spin.value())
         s.setValue("merge_threads", self.ns_merge_threads_spin.value())
         s.setValue("encode_threads", self.ns_encode_threads_spin.value())
@@ -128,8 +128,6 @@ class XemShortTab(QtWidgets.QWidget):
         for checkbox in (
             self.ns_sub_checkbox,
             self.ns_merge_checkbox,
-            self.ns_m3u8_checkbox,
-            self.ns_m3u8_reencode_checkbox,
             self.ns_sub_bold_cb,
             self.ns_sub_italic_cb,
         ):
@@ -192,6 +190,7 @@ class XemShortTab(QtWidgets.QWidget):
             "Production HLS: re-encode video va force keyframe moi 6 giay.\n"
             "Cham hon nhung segment doc lap/on dinh hon. Mac dinh tat de convert nhanh.")
         opts.addWidget(self.ns_m3u8_reencode_checkbox)
+        self.ns_m3u8_reencode_checkbox.hide()
         opts.addSpacing(10)
         opts.addWidget(QtWidgets.QLabel("CRF:"))
         self.ns_crf_spin = QtWidgets.QSpinBox()
