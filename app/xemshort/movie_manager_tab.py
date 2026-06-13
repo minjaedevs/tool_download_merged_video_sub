@@ -5,11 +5,13 @@ import os
 import time
 from datetime import datetime
 
+import requests
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .sync_movies_supabase import (
     MOVIE_SOURCES,
     NETSHORT_SOURCE,
+    _supabase_headers,
     load_env_file,
     sync_to_supabase,
     supabase_source_stats,
@@ -19,6 +21,8 @@ from .sync_movies_supabase import (
 _MOVIE_MGR_APP = "Tool Movie XemShort"
 _MOVIE_MGR_KEY = "MovieManager"
 _DEFAULT_SUPABASE_URL = "https://rmsxnajcudkjmtqsfhot.supabase.co"
+_SUBTITLE_ERROR_TABLE = "subtitle_error_movies"
+_SUBTITLE_ERROR_LIMIT = 100
 
 
 def _today_start_iso() -> str:
@@ -26,11 +30,39 @@ def _today_start_iso() -> str:
     return today.isoformat()
 
 
+def fetch_subtitle_error_movies(
+    supabase_url: str,
+    supabase_key: str,
+    source: str,
+    limit: int = _SUBTITLE_ERROR_LIMIT,
+) -> list[dict]:
+    """Fetch recent subtitle-error rows for one implemented source."""
+    base = supabase_url.rstrip("/")
+    endpoint = f"{base}/rest/v1/{_SUBTITLE_ERROR_TABLE}"
+    headers = _supabase_headers(supabase_key)
+    params = {
+        "select": (
+            "source,play_id,movie_name,error_episode_count,error_episode_names,"
+            "last_error_episode_name,last_error_note,last_error_at,updated_at"
+        ),
+        "source": f"eq.{source}",
+        "order": "last_error_at.desc",
+        "limit": str(limit),
+    }
+    response = requests.get(endpoint, headers=headers, params=params, timeout=30)
+    if response.status_code == 404:
+        return []
+    response.raise_for_status()
+    rows = response.json()
+    return rows if isinstance(rows, list) else []
+
+
 class MovieManagerWorker(QtCore.QThread):
     """Run Supabase movie tasks off the UI thread."""
 
     log_msg = QtCore.Signal(str)
     stats_ready = QtCore.Signal(dict)
+    subtitle_errors_ready = QtCore.Signal(str, list)
     sync_ready = QtCore.Signal(dict)
     error = QtCore.Signal(str)
 
@@ -62,6 +94,13 @@ class MovieManagerWorker(QtCore.QThread):
                     synced_since=self.synced_since,
                 )
                 self.stats_ready.emit(stats)
+                if MOVIE_SOURCES.get(self.source, {}).get("sync_enabled"):
+                    rows = fetch_subtitle_error_movies(
+                        self.supabase_url,
+                        self.supabase_key,
+                        self.source,
+                    )
+                    self.subtitle_errors_ready.emit(self.source, rows)
                 return
 
             if self.action == "sync":
@@ -76,6 +115,13 @@ class MovieManagerWorker(QtCore.QThread):
                     self.supabase_key,
                     synced_since=self.synced_since,
                 )
+                if MOVIE_SOURCES.get(self.source, {}).get("sync_enabled"):
+                    rows = fetch_subtitle_error_movies(
+                        self.supabase_url,
+                        self.supabase_key,
+                        self.source,
+                    )
+                    self.subtitle_errors_ready.emit(self.source, rows)
                 self.sync_ready.emit(result)
                 return
 
@@ -193,6 +239,17 @@ class MovieManagerTab(QtWidgets.QWidget):
         refresh_btn.clicked.connect(lambda *_args, s=source: self._start_worker("stats", source=s))
         actions.addWidget(refresh_btn)
 
+        refresh_errors_btn = None
+        if meta["sync_enabled"]:
+            refresh_errors_btn = QtWidgets.QPushButton("Refresh sub loi")
+            refresh_errors_btn.setStyleSheet(
+                "QPushButton { background:#7c2d12;color:white;font-weight:700;padding:7px 14px;border-radius:6px; }"
+                "QPushButton:hover { background:#9a3412; }"
+                "QPushButton:disabled { background:#9ca3af; }"
+            )
+            refresh_errors_btn.clicked.connect(lambda *_args, s=source: self._start_worker("stats", source=s))
+            actions.addWidget(refresh_errors_btn)
+
         sync_btn = QtWidgets.QPushButton("Sync data")
         sync_btn.setEnabled(bool(meta["sync_enabled"]))
         sync_btn.setStyleSheet(
@@ -204,6 +261,43 @@ class MovieManagerTab(QtWidgets.QWidget):
         actions.addWidget(sync_btn)
         actions.addStretch()
         root.addLayout(actions)
+
+        subtitle_error_table = None
+        subtitle_error_count = None
+        if meta["sync_enabled"]:
+            error_box = QtWidgets.QGroupBox("Subtitle loi gan day")
+            error_lay = QtWidgets.QVBoxLayout(error_box)
+            subtitle_error_count = QtWidgets.QLabel("0 phim co loi sub")
+            subtitle_error_count.setStyleSheet("color:#7f1d1d;font-weight:700;")
+            error_lay.addWidget(subtitle_error_count)
+
+            subtitle_error_table = QtWidgets.QTableWidget(0, 7)
+            subtitle_error_table.setHorizontalHeaderLabels([
+                "Movie ID",
+                "Ten phim",
+                "Tap loi",
+                "So tap",
+                "Loi gan nhat",
+                "Note",
+                "Time",
+            ])
+            subtitle_error_table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+            subtitle_error_table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+            subtitle_error_table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+            subtitle_error_table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
+            subtitle_error_table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
+            subtitle_error_table.horizontalHeader().setSectionResizeMode(5, QtWidgets.QHeaderView.Stretch)
+            subtitle_error_table.horizontalHeader().setSectionResizeMode(6, QtWidgets.QHeaderView.ResizeToContents)
+            subtitle_error_table.verticalHeader().setVisible(False)
+            subtitle_error_table.setWordWrap(True)
+            subtitle_error_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+            subtitle_error_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
+            subtitle_error_table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+            subtitle_error_table.setSortingEnabled(True)
+            copy_shortcut = QtGui.QShortcut(QtGui.QKeySequence.Copy, subtitle_error_table)
+            copy_shortcut.activated.connect(lambda table=subtitle_error_table: self._copy_table_selection(table))
+            error_lay.addWidget(subtitle_error_table, stretch=1)
+            root.addWidget(error_box, stretch=2)
 
         log = QtWidgets.QTextEdit()
         log.setReadOnly(True)
@@ -217,7 +311,10 @@ class MovieManagerTab(QtWidgets.QWidget):
             "today": today_value,
             "status": status_value,
             "refresh_btn": refresh_btn,
+            "refresh_errors_btn": refresh_errors_btn,
             "sync_btn": sync_btn,
+            "subtitle_error_count": subtitle_error_count,
+            "subtitle_error_table": subtitle_error_table,
             "log": log,
         }
         return tab
@@ -238,7 +335,13 @@ class MovieManagerTab(QtWidgets.QWidget):
     def _on_source_tab_changed(self, index: int) -> None:
         sources = list(MOVIE_SOURCES)
         if 0 <= index < len(sources):
-            self._select_source(sources[index])
+            source = sources[index]
+            self._select_source(source)
+            if MOVIE_SOURCES[source]["sync_enabled"]:
+                QtCore.QTimer.singleShot(
+                    0,
+                    lambda s=source: self._start_worker("stats", source=s, quiet_missing=True),
+                )
 
     def _select_source(self, source: str) -> None:
         self._selected_source = source
@@ -268,9 +371,12 @@ class MovieManagerTab(QtWidgets.QWidget):
         for source, meta in MOVIE_SOURCES.items():
             panel = self._panels[source]
             refresh_btn = panel["refresh_btn"]
+            refresh_errors_btn = panel.get("refresh_errors_btn")
             sync_btn = panel["sync_btn"]
             if isinstance(refresh_btn, QtWidgets.QPushButton):
                 refresh_btn.setEnabled(not busy)
+            if isinstance(refresh_errors_btn, QtWidgets.QPushButton):
+                refresh_errors_btn.setEnabled(not busy)
             if isinstance(sync_btn, QtWidgets.QPushButton):
                 sync_btn.setEnabled((not busy) and bool(meta["sync_enabled"]))
 
@@ -307,6 +413,7 @@ class MovieManagerTab(QtWidgets.QWidget):
         self._worker = worker
         worker.log_msg.connect(lambda msg, s=source: self._log(s, msg))
         worker.stats_ready.connect(self._on_stats_ready)
+        worker.subtitle_errors_ready.connect(self._on_subtitle_errors_ready)
         worker.sync_ready.connect(self._on_sync_ready)
         worker.error.connect(lambda msg, s=source: self._on_error(s, msg))
         worker.finished.connect(lambda w=worker: self._on_worker_finished(w))
@@ -348,6 +455,77 @@ class MovieManagerTab(QtWidgets.QWidget):
                 total_label.setText(str(total))
             if isinstance(today_label, QtWidgets.QLabel):
                 today_label.setText(str(today_new))
+
+    def _on_subtitle_errors_ready(self, source: str, rows: list) -> None:
+        self._apply_subtitle_errors(source, rows)
+        self._log(source, f"[{time.strftime('%H:%M:%S')}] Loaded subtitle errors: {len(rows)} phim.")
+
+    def _apply_subtitle_errors(self, source: str, rows: list) -> None:
+        panel = self._panels.get(source, {})
+        table = panel.get("subtitle_error_table")
+        count_label = panel.get("subtitle_error_count")
+        if not isinstance(table, QtWidgets.QTableWidget):
+            return
+
+        table.setSortingEnabled(False)
+        table.setRowCount(0)
+        for row_data in rows:
+            if not isinstance(row_data, dict):
+                continue
+            row = table.rowCount()
+            table.insertRow(row)
+            values = [
+                str(row_data.get("play_id") or ""),
+                str(row_data.get("movie_name") or ""),
+                str(row_data.get("error_episode_names") or ""),
+                str(row_data.get("error_episode_count") or 0),
+                str(row_data.get("last_error_episode_name") or ""),
+                str(row_data.get("last_error_note") or ""),
+                self._format_supabase_time(str(row_data.get("last_error_at") or "")),
+            ]
+            play_id = str(row_data.get("play_id") or "")
+            for col, value in enumerate(values):
+                item = QtWidgets.QTableWidgetItem(value)
+                item.setToolTip(value)
+                if col in (0, 1):
+                    item.setData(QtCore.Qt.ItemDataRole.UserRole, play_id)
+                    item.setToolTip(f"{value}\nplay_id: {play_id}" if play_id and col == 1 else value)
+                table.setItem(row, col, item)
+        table.setSortingEnabled(True)
+        table.sortItems(6, QtCore.Qt.SortOrder.DescendingOrder)
+        table.resizeRowsToContents()
+
+        if isinstance(count_label, QtWidgets.QLabel):
+            count_label.setText(f"{len(rows)} phim co loi sub")
+
+    @staticmethod
+    def _format_supabase_time(value: str) -> str:
+        if not value:
+            return ""
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone()
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return value
+
+    @staticmethod
+    def _copy_table_selection(table: QtWidgets.QTableWidget) -> None:
+        ranges = table.selectedRanges()
+        if not ranges:
+            item = table.currentItem()
+            if item is not None:
+                QtWidgets.QApplication.clipboard().setText(item.text())
+            return
+
+        lines: list[str] = []
+        for selected_range in ranges:
+            for row in range(selected_range.topRow(), selected_range.bottomRow() + 1):
+                values = []
+                for col in range(selected_range.leftColumn(), selected_range.rightColumn() + 1):
+                    item = table.item(row, col)
+                    values.append(item.text() if item is not None else "")
+                lines.append("\t".join(values))
+        QtWidgets.QApplication.clipboard().setText("\n".join(lines))
 
     def _on_error(self, source: str, message: str) -> None:
         self._log(source, f"[{time.strftime('%H:%M:%S')}] ERROR: {message}")

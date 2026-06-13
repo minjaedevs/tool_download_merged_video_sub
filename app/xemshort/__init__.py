@@ -1,6 +1,13 @@
 """XemShort — package for the XemShort downloader tab."""
 from .models import NSMovie, NSEpisode, XSEpisode, XSMovie
-from .workers import NSDownloadMergeWorker, NSFetchWorker, XSDownloadMergeWorker, XSFetchWorker
+from .workers import (
+    DramaWaveDownloadMergeWorker,
+    DramaWaveFetchWorker,
+    NSDownloadMergeWorker,
+    NSFetchWorker,
+    XSDownloadMergeWorker,
+    XSFetchWorker,
+)
 from .dialogs import (
     XSDetailDialog,
     XSEpisodePickerDialog,
@@ -15,6 +22,7 @@ from .dialogs import (
     NSVttEditorDialog,
 )
 from .tab import XemShortTab
+from .dramawave_tab import DramaWaveTab
 from .movie_manager_tab import MovieManagerTab
 
 __all__ = [
@@ -22,12 +30,12 @@ __all__ = [
     "NSEpisode", "NSMovie", "XSEpisode", "XSMovie",
     # workers
     "NSFetchWorker", "NSDownloadMergeWorker",
-    "XSFetchWorker", "XSDownloadMergeWorker",
+    "XSFetchWorker", "XSDownloadMergeWorker", "DramaWaveFetchWorker", "DramaWaveDownloadMergeWorker",
     # dialogs (XS = current, NS = backward-compat)
     "XSDetailDialog", "XSEpisodePickerDialog", "XSPasteJsonDialog",
     "XSVideoPopup", "XSVttEditorDialog",
     "NSDetailDialog", "NSEpisodePickerDialog", "NSPasteJsonDialog",
     "NSVideoPopup", "NSVttEditorDialog",
     # tab
-    "XemShortTab", "MovieManagerTab",
+    "XemShortTab", "DramaWaveTab", "MovieManagerTab",
 ]

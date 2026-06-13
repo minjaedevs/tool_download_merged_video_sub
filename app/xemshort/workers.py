@@ -31,6 +31,7 @@ from .helpers import (
     _ns_try_decrypt,
 )
 from .cache import _ns_cache_get, _ns_cache_key, _ns_cache_set
+from .subtitle_errors import upsert_subtitle_error
 
 # API headers used for all XemShort HTTP requests
 NETSHORT_API_HEADERS = {
@@ -46,6 +47,25 @@ NETSHORT_API_HEADERS = {
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "same-site",
     "short-source": "netshort",
+}
+
+DRAMAWAVE_API_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/149.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Origin": "https://xemshort.top",
+    "Referer": "https://xemshort.top/",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+    "sec-ch-ua": '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "short-source": "dramawave",
 }
 
 _MERGE_SIDECAR_FILE = ".merge_settings.json"
@@ -139,16 +159,17 @@ class XSFetchWorker(QtCore.QThread):
     cache_hit = QtCore.Signal(list, str, str, int)   # episodes, movie_name, movie_id, instance_id
     error     = QtCore.Signal(str, int)              # msg, instance_id
 
-    def __init__(self, api_url: str, movie_id: str):
+    def __init__(self, api_url: str, movie_id: str, headers: dict[str, str] | None = None):
         """Store API URL and movie ID for the fetch request."""
         super().__init__()
         self.api_url = api_url
         self.movie_id = movie_id
+        self.headers = headers or NETSHORT_API_HEADERS
         self.instance_id: int = uuid.uuid4().int & 0x7FFFFFFF
 
     def run(self):
         """Fetch episodes, checking in-memory cache first (TTL=30 min)."""
-        key = _ns_cache_key(self.api_url, self.movie_id)
+        key = _ns_cache_key(f"{self.headers.get('short-source', '')}:{self.api_url}", self.movie_id)
         cached = _ns_cache_get(key)
         if cached is not None:
             episodes, movie_name = cached
@@ -161,18 +182,18 @@ class XSFetchWorker(QtCore.QThread):
             _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if _platform.system() == "Windows" else {}
             result = sp.run(
                 ["curl", "-s", "--max-time", "15",
-                 "-H", f"User-Agent: {NETSHORT_API_HEADERS['User-Agent']}",
-                 "-H", "Accept: */*",
-                 "-H", f"Origin: {NETSHORT_API_HEADERS['Origin']}",
-                 "-H", f"Referer: {NETSHORT_API_HEADERS['Referer']}",
-                 "-H", f"short-source: {NETSHORT_API_HEADERS['short-source']}",
+                 "-H", f"User-Agent: {self.headers['User-Agent']}",
+                 "-H", f"Accept: {self.headers.get('Accept', '*/*')}",
+                 "-H", f"Origin: {self.headers['Origin']}",
+                 "-H", f"Referer: {self.headers['Referer']}",
+                 "-H", f"short-source: {self.headers['short-source']}",
                  url],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=20, **_cflags
             )
             if result.returncode != 0 or not result.stdout.strip():
                 # Fall back to requests
-                r = requests.get(url, headers=NETSHORT_API_HEADERS, timeout=15)
+                r = requests.get(url, headers=self.headers, timeout=15)
                 r.raise_for_status()
                 data = r.json()
             else:
@@ -219,8 +240,17 @@ class XSFetchWorker(QtCore.QThread):
 NSFetchWorker = XSFetchWorker
 
 
+class DramaWaveFetchWorker(XSFetchWorker):
+    """Fetch DramaWave episode list with the required source header."""
+
+    def __init__(self, api_url: str, movie_id: str):
+        super().__init__(api_url, movie_id, headers=DRAMAWAVE_API_HEADERS)
+
+
 class XSDownloadMergeWorker(QtCore.QThread):
     """Background thread: downloads video + subtitle then optionally hardcodes sub via ffmpeg."""
+
+    subtitle_error_source = "netshort"
 
     log_msg        = QtCore.Signal(str)
     episode_status = QtCore.Signal(int, str, int)   # ep_num, status, instance_id
@@ -257,6 +287,25 @@ class XSDownloadMergeWorker(QtCore.QThread):
         # Unique ID so stale signals from a previous worker are ignored
         import uuid
         self.instance_id = uuid.uuid4().int & 0x7FFFFFFF
+
+    def _record_subtitle_error(self, ep: XSEpisode, note: str, **raw) -> None:
+        """Best-effort Supabase upsert for subtitle failures."""
+        try:
+            ok = upsert_subtitle_error(
+                self.subtitle_error_source,
+                self.movie,
+                ep,
+                note,
+                raw={k: v for k, v in raw.items() if v is not None},
+            )
+            if ok:
+                self.log(f"subtitle error saved: {self.subtitle_error_source} T{ep.episode}")
+        except Exception as exc:
+            self.log(f"subtitle error save failed T{ep.episode}: {exc}")
+
+    @staticmethod
+    def _is_subtitle_download_error(note: str) -> bool:
+        return note == "empty subtitle download" or note.startswith("subtitle download failed:")
 
     def stop(self):
         """Signal the worker to stop after the current episode finishes."""
@@ -425,6 +474,16 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 r = requests.get(ep.subtitle_url,
                                  headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30)
                 r.raise_for_status()
+                if not r.content or not r.content.strip():
+                    ep.error_msg = "empty subtitle download"
+                    self._record_subtitle_error(
+                        ep,
+                        "empty subtitle download",
+                        subtitle_url=ep.subtitle_url,
+                        bytes=0,
+                    )
+                    self.log(f"sub tap {ep.episode} empty")
+                    return True
                 ext = _ns_detect_sub_ext(r.content)
                 sub_path = folder / f"{base}.{ext}"
                 with open(sub_path, "wb") as f:
@@ -432,6 +491,13 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 ep.sub_path = sub_path
                 self.log(f"sub tập {ep.episode} OK ({ext}, {len(r.content)} bytes)")
             except Exception as e:
+                ep.error_msg = f"subtitle download failed: {e}"
+                self._record_subtitle_error(
+                    ep,
+                    "subtitle download failed",
+                    subtitle_url=ep.subtitle_url,
+                    error=str(e),
+                )
                 self.log(f"sub tập {ep.episode} lỗi: {e}")
 
         return True
@@ -448,9 +514,18 @@ class XSDownloadMergeWorker(QtCore.QThread):
         out_path = merge_dir / f"{base}_merged.mp4"
 
         if not ep.sub_path or not ep.sub_path.exists():
+            previous_error = ep.error_msg
             ep.merge_note = "no_sub"
             ep.status = "error"
             ep.error_msg = "missing subtitle"
+            if previous_error and self._is_subtitle_download_error(previous_error):
+                self.log(f"subtitle error already recorded at download step T{ep.episode}")
+            else:
+                self._record_subtitle_error(
+                    ep,
+                    previous_error or "missing subtitle",
+                    subtitle_url=ep.subtitle_url,
+                )
             self.episode_status.emit(ep.episode, "error", self.instance_id)
             self.log(
                 f"tập {ep.episode}: thiếu sub, bỏ qua merge. "
@@ -495,6 +570,12 @@ class XSDownloadMergeWorker(QtCore.QThread):
             ep.merge_note = "no_sub"
             ep.status = "error"
             ep.error_msg = "invalid or empty subtitle"
+            self._record_subtitle_error(
+                ep,
+                "invalid or empty subtitle",
+                subtitle_url=ep.subtitle_url,
+                sub_path=str(ep.sub_path),
+            )
             self.episode_status.emit(ep.episode, "error", self.instance_id)
             self.log(
                 f"tập {ep.episode}: subtitle không hợp lệ hoặc rỗng, không merge. "
@@ -910,3 +991,175 @@ class XSDownloadMergeWorker(QtCore.QThread):
 
 # Backward-compat alias
 NSDownloadMergeWorker = XSDownloadMergeWorker
+
+
+class DramaWaveDownloadMergeWorker(XSDownloadMergeWorker):
+    """Download worker for DramaWave HLS episode URLs."""
+
+    subtitle_error_source = "dramawave"
+
+    def _is_hls_url(self, url: str) -> bool:
+        """Return True for HLS playlist URLs, including non-standard .m3u links."""
+        lower = (url or "").lower()
+        return ".m3u8" in lower or ".m3u" in lower or "play.m3u" in lower
+
+    def _download_hls_video(self, url: str, output: Path, desc: str) -> bool:
+        """Use ffmpeg to download/remux an HLS playlist into a valid MP4 file."""
+        if output.exists() and output.stat().st_size > 1024:
+            try:
+                if _ns_get_video_duration_secs(output) and _ns_get_video_duration_secs(output) > 0:
+                    self.log(f"SKIP {desc} (da ton tai)")
+                    return True
+            except Exception:
+                pass
+            try:
+                output.unlink()
+                self.log(f"xoa file video hong: {output.name}")
+            except Exception as exc:
+                self.log(f"khong xoa duoc file video hong {output.name}: {exc}")
+                return False
+
+        ffmpeg_path = self._get_ffmpeg_path()
+        if not ffmpeg_path:
+            self.log(f"{desc}: can ffmpeg de tai HLS/m3u")
+            return False
+
+        output.parent.mkdir(parents=True, exist_ok=True)
+        tmp = output.with_suffix(output.suffix + ".part.mp4")
+        playlist_tmp = output.with_suffix(output.suffix + ".playlist.m3u8")
+        tmp.unlink(missing_ok=True)
+        playlist_tmp.unlink(missing_ok=True)
+
+        try:
+            response = requests.get(url, headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30)
+            response.raise_for_status()
+            if b"#EXTM3U" not in response.content[:1024]:
+                preview = response.content[:300].decode("utf-8", errors="replace")
+                self.log(f"{desc}: playlist khong hop le: {preview}")
+                return False
+            playlist_tmp.write_bytes(response.content)
+        except Exception as exc:
+            self.log(f"LOI {desc} khi tai playlist HLS/m3u: {exc}")
+            return False
+
+        cmd = [
+            str(ffmpeg_path),
+            "-y",
+            "-loglevel", "warning",
+            "-protocol_whitelist", "file,http,https,tcp,tls,crypto,data",
+            "-allowed_extensions", "ALL",
+            "-allowed_segment_extensions", "ALL",
+            "-extension_picky", "0",
+            "-i", str(playlist_tmp),
+            "-map", "0:v:0?",
+            "-map", "0:a:0?",
+            "-c", "copy",
+            "-bsf:a", "aac_adtstoasc",
+            str(tmp),
+        ]
+        try:
+            import subprocess as sp
+            import platform as _platform
+            _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if _platform.system() == "Windows" else {}
+            result = sp.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=900,
+                **_cflags,
+            )
+            if result.returncode != 0:
+                self.log(f"ffmpeg tai HLS loi {desc}: {result.stderr[:500]}")
+                tmp.unlink(missing_ok=True)
+                playlist_tmp.unlink(missing_ok=True)
+                return False
+            if not tmp.exists() or tmp.stat().st_size <= 1024:
+                self.log(f"ffmpeg tai HLS loi {desc}: output rong")
+                tmp.unlink(missing_ok=True)
+                playlist_tmp.unlink(missing_ok=True)
+                return False
+            tmp.replace(output)
+            playlist_tmp.unlink(missing_ok=True)
+            self.log(f"{desc} OK (HLS/m3u -> MP4, {output.stat().st_size} bytes)")
+            return True
+        except sp.TimeoutExpired:
+            self.log(f"TIMEOUT {desc} (HLS/m3u)")
+        except Exception as exc:
+            self.log(f"LOI {desc} (HLS/m3u): {exc}")
+        tmp.unlink(missing_ok=True)
+        playlist_tmp.unlink(missing_ok=True)
+        return False
+
+    def _download_episode(self, ep: XSEpisode) -> bool:
+        """Download DramaWave HLS video and subtitle for one episode."""
+        if self._stop.is_set() or not ep.selected:
+            return False
+
+        folder = self.movie.save_dir / self.movie.folder_name
+        folder.mkdir(parents=True, exist_ok=True)
+
+        base = self._episode_base_name(ep)
+        video_path = folder / f"{base}.mp4"
+
+        if video_path.exists() and video_path.stat().st_size > 1024 and ep.status == "done":
+            ep.video_path = video_path
+            ep.status = "downloaded"
+            self.episode_status.emit(ep.episode, "downloaded", self.instance_id)
+            self.log(f"SKIP video tap {ep.episode} (da ton tai)")
+        else:
+            self.episode_status.emit(ep.episode, "downloading", self.instance_id)
+            if self._is_hls_url(ep.play):
+                dl_ok = self._download_hls_video(ep.play, video_path, f"video tap {ep.episode}")
+            else:
+                dl_ok = self._download_file(ep.play, video_path, f"video tap {ep.episode}")
+            if not dl_ok:
+                ep.status = "error"
+                ep.error_msg = "download video failed"
+                self.episode_status.emit(ep.episode, "error", self.instance_id)
+                return False
+            ep.video_path = video_path
+            ep.status = "downloaded"
+            self.episode_status.emit(ep.episode, "downloaded", self.instance_id)
+
+        if self.download_sub and ep.subtitle_url:
+            ep.sub_path = None
+            for ext in ("srt", "vtt", "txt"):
+                old_sub = folder / f"{base}.{ext}"
+                if old_sub.exists():
+                    try:
+                        old_sub.unlink()
+                        self.log(f"xoa sub cu tap {ep.episode}: {old_sub.name}")
+                    except Exception as exc:
+                        self.log(f"khong xoa duoc sub cu tap {ep.episode} ({old_sub.name}): {exc}")
+            try:
+                response = requests.get(ep.subtitle_url, headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30)
+                response.raise_for_status()
+                if not response.content or not response.content.strip():
+                    ep.error_msg = "empty subtitle download"
+                    self._record_subtitle_error(
+                        ep,
+                        "empty subtitle download",
+                        subtitle_url=ep.subtitle_url,
+                        bytes=0,
+                    )
+                    self.log(f"sub tap {ep.episode} empty")
+                    return True
+                ext = _ns_detect_sub_ext(response.content)
+                sub_path = folder / f"{base}.{ext}"
+                with open(sub_path, "wb") as f:
+                    f.write(response.content)
+                ep.sub_path = sub_path
+                self.log(f"sub tap {ep.episode} OK ({ext}, {len(response.content)} bytes)")
+            except Exception as exc:
+                ep.error_msg = f"subtitle download failed: {exc}"
+                self._record_subtitle_error(
+                    ep,
+                    "subtitle download failed",
+                    subtitle_url=ep.subtitle_url,
+                    error=str(exc),
+                )
+                self.log(f"sub tap {ep.episode} loi: {exc}")
+
+        return True

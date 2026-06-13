@@ -8,6 +8,7 @@ from typing import Any
 from PySide6 import QtCore, QtGui, QtNetwork, QtWidgets
 
 from .sync_movies_supabase import (
+    DRAMAWAVE_SOURCE,
     NETSHORT_SOURCE,
     load_env_file,
     search_movies_supabase,
@@ -25,12 +26,14 @@ class NetShortSearchWorker(QtCore.QThread):
     success = QtCore.Signal(list, int, int, str)
     error = QtCore.Signal(str)
 
-    def __init__(self, supabase_url: str, supabase_key: str, query: str, page: int):
+    def __init__(self, supabase_url: str, supabase_key: str, query: str, page: int,
+                 source: str = NETSHORT_SOURCE):
         super().__init__()
         self.supabase_url = supabase_url
         self.supabase_key = supabase_key
         self.query = query
         self.page = page
+        self.source = source
 
     def run(self) -> None:
         try:
@@ -40,7 +43,7 @@ class NetShortSearchWorker(QtCore.QThread):
                 query=self.query,
                 page=self.page,
                 page_size=PAGE_SIZE,
-                source=NETSHORT_SOURCE,
+                source=self.source,
             )
             self.success.emit(rows, total, self.page, self.query)
         except Exception as exc:
@@ -128,9 +131,11 @@ class MovieCard(QtWidgets.QFrame):
 class NetShortMovieSearchDialog(QtWidgets.QDialog):
     """Dialog for picking a NetShort movie from the synced catalog."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, source: str = NETSHORT_SOURCE, source_name: str = "NetShort"):
         super().__init__(parent)
-        self.setWindowTitle("Tim kiem NetShort")
+        self.source = source
+        self.source_name = source_name
+        self.setWindowTitle(f"Tim kiem {source_name}")
         self.resize(760, 760)
         self._worker: NetShortSearchWorker | None = None
         self._selected_movie: dict[str, Any] | None = None
@@ -283,7 +288,13 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
         self.prev_btn.setEnabled(False)
         self.next_btn.setEnabled(False)
 
-        worker = NetShortSearchWorker(self.supabase_url, self.supabase_key, self._query, self._page)
+        worker = NetShortSearchWorker(
+            self.supabase_url,
+            self.supabase_key,
+            self._query,
+            self._page,
+            source=self.source,
+        )
         self._worker = worker
         worker.success.connect(self._on_search_success)
         worker.error.connect(self._on_search_error)
@@ -367,6 +378,8 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
             ("play_id", movie.get("play_id")),
             ("thumbnail", movie.get("thumbnail")),
             ("label_list", movie.get("label_list")),
+            ("episode_count", movie.get("episode_count")),
+            ("source_api", movie.get("source_api")),
             ("search_text", movie.get("search_text")),
         ]
         return "\n".join(f"{key}: {value or ''}" for key, value in fields)
@@ -436,3 +449,10 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
         self.page_label.setText(f"Trang {self._page}/{max_page}")
         self.prev_btn.setEnabled(self._page > 1 and not self._worker_running())
         self.next_btn.setEnabled(self._page < max_page and not self._worker_running())
+
+
+class DramaWaveMovieSearchDialog(NetShortMovieSearchDialog):
+    """Dialog for picking a DramaWave movie from the synced catalog."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent, source=DRAMAWAVE_SOURCE, source_name="DramaWave")

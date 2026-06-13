@@ -21,22 +21,25 @@ import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
 
 import requests
 
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 HOME_URL = "https://api.xemshort.top/api/home"
+LOADMORE_API_URL = "https://api.xemshort.top/api/loadmore"
 LOADMORE_URL = (
-    "https://api.xemshort.top/api/loadmore"
+    LOADMORE_API_URL +
     "?page={page}&url=https:%2F%2Fnetshort.com%2Fvi%2Fdrama%2Fall-plots%2Fpage%2F"
 )
 NETSHORT_SOURCE = "netshort"
+DRAMAWAVE_SOURCE = "dramawave"
 MOVIE_SOURCES = {
     "netshort": {"name": "NetShort", "table": "netshort_movies", "sync_enabled": True},
     "reelshort": {"name": "ReelShort", "table": "reelshort_movies", "sync_enabled": False},
     "shortmax": {"name": "ShortMax", "table": "shortmax_movies", "sync_enabled": False},
-    "dramawave": {"name": "DramaWave", "table": "dramawave_movies", "sync_enabled": False},
+    "dramawave": {"name": "DramaWave", "table": "dramawave_movies", "sync_enabled": True},
     "dramabox": {"name": "DramaBox", "table": "dramabox_movies", "sync_enabled": False},
 }
 
@@ -53,6 +56,25 @@ NETSHORT_HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/148.0.0.0 Safari/537.36"
+    ),
+}
+
+DRAMAWAVE_HEADERS = {
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Origin": "https://xemshort.top",
+    "Referer": "https://xemshort.top/",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+    "sec-ch-ua": '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "short-source": DRAMAWAVE_SOURCE,
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/149.0.0.0 Safari/537.36"
     ),
 }
 
@@ -93,6 +115,29 @@ def _movie_key(item: dict[str, Any]) -> str:
     return _plain_text(item.get("playId") or item.get("play_id") or item.get("id"))
 
 
+def _parse_episode_count(value: Any) -> int | None:
+    text = _ascii_text(value)
+    digits = "".join(ch if ch.isdigit() else " " for ch in text).split()
+    if not digits:
+        return None
+    try:
+        return int(digits[0])
+    except ValueError:
+        return None
+
+
+def _cursor_value(cursor: str | None, key: str) -> int | None:
+    if not cursor:
+        return None
+    values = parse_qs(cursor, keep_blank_values=True).get(key)
+    if not values:
+        return None
+    try:
+        return int(values[0])
+    except (TypeError, ValueError):
+        return None
+
+
 def source_table(source: str) -> str:
     if source not in MOVIE_SOURCES:
         raise ValueError(f"Unknown movie source: {source}")
@@ -127,8 +172,81 @@ def _normalize_movie(item: dict[str, Any], source_api: str, source_page: int | N
     }
 
 
-def _fetch_json(session: requests.Session, url: str, timeout: int = 20) -> dict[str, Any]:
-    response = session.get(url, headers=NETSHORT_HEADERS, timeout=timeout)
+def _normalize_dramawave_movie(
+    item: dict[str, Any],
+    source_api: str,
+    source_cursor: str | None,
+    is_featured: bool = False,
+) -> dict[str, Any] | None:
+    play_id = _movie_key(item)
+    name = _plain_text(item.get("name"))
+    if not play_id or not name or name.upper() == "TOP":
+        return None
+
+    intro = _plain_text(item.get("intro"))
+    label_list = _plain_text(item.get("labelList") or item.get("label_list"))
+    search_text = _plain_text(" ".join(part for part in (name, intro, label_list) if part))
+    search_text_ascii = _ascii_text(search_text)
+    now = _now_iso()
+
+    movie: dict[str, Any] = {
+        "source_id": _plain_text(item.get("id")) or play_id,
+        "play_id": play_id,
+        "name": name,
+        "thumbnail": _plain_text(item.get("thumbnail")) or None,
+        "intro": intro or None,
+        "label_list": label_list or None,
+        "episode_count": _parse_episode_count(label_list),
+        "search_text": search_text,
+        "search_text_ascii": search_text_ascii,
+        "source_api": source_api,
+        "source_cursor": source_cursor,
+        "source_offset": _cursor_value(source_cursor, "offset"),
+        "position_index": _cursor_value(source_cursor, "position_index"),
+        "is_featured": is_featured,
+        "raw": item,
+        "last_seen_at": now,
+        "synced_at": now,
+        "updated_at": now,
+    }
+    return movie
+
+
+def _merge_dramawave_movie(old: dict[str, Any] | None, new: dict[str, Any]) -> dict[str, Any]:
+    if not old:
+        return new
+    merged = old.copy()
+    for key, value in new.items():
+        if value is None:
+            continue
+        if key in {"intro", "label_list", "episode_count"} and not value:
+            continue
+        if key == "is_featured":
+            merged[key] = bool(merged.get(key)) or bool(value)
+            continue
+        merged[key] = value
+    merged["search_text"] = _plain_text(
+        " ".join(
+            part for part in (
+                merged.get("name"),
+                merged.get("intro"),
+                merged.get("label_list"),
+            )
+            if part
+        )
+    )
+    merged["search_text_ascii"] = _ascii_text(merged["search_text"])
+    return merged
+
+
+def _fetch_json(
+    session: requests.Session,
+    url: str,
+    timeout: int = 20,
+    headers: dict[str, str] | None = None,
+    params: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    response = session.get(url, headers=headers or NETSHORT_HEADERS, params=params, timeout=timeout)
     response.raise_for_status()
     data = response.json()
     if not isinstance(data, dict):
@@ -220,6 +338,108 @@ def fetch_movies(start_page: int = 2, max_pages: int = 500, pause: float = 0.15,
     return list(by_play_id.values())
 
 
+def fetch_dramawave_movies(max_pages: int = 500, pause: float = 0.35,
+                           log_fn=None) -> list[dict[str, Any]]:
+    """Fetch DramaWave /api/home and follow loadmore cursors until nextPage stops."""
+    def log(message: str) -> None:
+        if log_fn:
+            log_fn(message)
+
+    by_play_id: dict[str, dict[str, Any]] = {}
+    session = requests.Session()
+    home = _fetch_json(session, HOME_URL, headers=DRAMAWAVE_HEADERS)
+
+    for item in home.get("data") or []:
+        if not isinstance(item, dict):
+            continue
+        movie = _normalize_dramawave_movie(
+            item,
+            source_api="home.data",
+            source_cursor=None,
+            is_featured=True,
+        )
+        if movie:
+            by_play_id[movie["play_id"]] = _merge_dramawave_movie(
+                by_play_id.get(movie["play_id"]),
+                movie,
+            )
+
+    all_block = home.get("all") if isinstance(home.get("all"), dict) else {}
+    cursor = _plain_text(all_block.get("url") if isinstance(all_block, dict) else "")
+    next_page = bool(all_block.get("nextPage")) if isinstance(all_block, dict) else False
+    all_items = all_block.get("data") if isinstance(all_block, dict) else []
+    for item in all_items or []:
+        if not isinstance(item, dict):
+            continue
+        movie = _normalize_dramawave_movie(
+            item,
+            source_api="home.all",
+            source_cursor=cursor,
+            is_featured=False,
+        )
+        if movie:
+            by_play_id[movie["play_id"]] = _merge_dramawave_movie(
+                by_play_id.get(movie["play_id"]),
+                movie,
+            )
+
+    log(f"DramaWave home: unique={len(by_play_id)}, nextPage={next_page}, cursor={cursor or '-'}")
+
+    page_count = 0
+    seen_cursors: set[str] = set()
+    while next_page and cursor and page_count < max_pages:
+        if cursor in seen_cursors:
+            log(f"DramaWave stop: repeated cursor {cursor}.")
+            break
+        seen_cursors.add(cursor)
+        page_count += 1
+
+        try:
+            data = _fetch_json(
+                session,
+                LOADMORE_API_URL,
+                headers=DRAMAWAVE_HEADERS,
+                params={"url": cursor},
+            )
+        except ValueError as exc:
+            if _is_no_more_movies_response({"success": False, "message": str(exc)}):
+                log(f"DramaWave stop: {exc}")
+                break
+            raise
+        items = data.get("data") or []
+        before_count = len(by_play_id)
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            movie = _normalize_dramawave_movie(
+                item,
+                source_api="loadmore",
+                source_cursor=cursor,
+                is_featured=False,
+            )
+            if movie:
+                by_play_id[movie["play_id"]] = _merge_dramawave_movie(
+                    by_play_id.get(movie["play_id"]),
+                    movie,
+                )
+
+        new_count = len(by_play_id) - before_count
+        next_page = bool(data.get("nextPage"))
+        cursor = _plain_text(data.get("url"))
+        log(
+            f"DramaWave loadmore {page_count}: items={len(items)}, "
+            f"new={new_count}, total={len(by_play_id)}, nextPage={next_page}, "
+            f"cursor={cursor or '-'}"
+        )
+        if not items:
+            break
+        time.sleep(pause)
+
+    if page_count >= max_pages and next_page:
+        log(f"DramaWave stopped at max_pages={max_pages}.")
+    return list(by_play_id.values())
+
+
 def _supabase_headers(supabase_key: str, prefer: str = "return=minimal") -> dict[str, str]:
     return {
         "apikey": supabase_key,
@@ -263,8 +483,14 @@ def search_movies_supabase(supabase_url: str, supabase_key: str, query: str = ""
     headers = _supabase_headers(supabase_key)
     headers["Prefer"] = "count=exact"
     offset = (page - 1) * page_size
+    select_columns = "play_id,name,thumbnail,intro,label_list,search_text,search_text_ascii,created_at,synced_at"
+    if source == DRAMAWAVE_SOURCE:
+        select_columns = (
+            "play_id,name,thumbnail,intro,label_list,episode_count,"
+            "search_text,search_text_ascii,source_api,created_at,synced_at"
+        )
     params = {
-        "select": "play_id,name,thumbnail,intro,label_list,search_text,search_text_ascii,created_at,synced_at",
+        "select": select_columns,
         "order": "created_at.desc",
         "limit": str(page_size),
         "offset": str(offset),
@@ -315,31 +541,61 @@ def supabase_source_stats(supabase_url: str, supabase_key: str,
     return stats
 
 
-def test_insert_supabase(supabase_url: str, supabase_key: str, source: str = NETSHORT_SOURCE) -> str:
+def test_insert_supabase(
+    supabase_url: str,
+    supabase_key: str,
+    source: str = NETSHORT_SOURCE,
+    delete_after: bool = True,
+) -> str:
     """Insert and delete one temporary row to verify write permissions."""
     table = source_table(source)
     play_id = f"test-sync-{int(time.time() * 1000)}"
     now = _now_iso()
-    payload = [{
-        "source_id": play_id,
-        "play_id": play_id,
-        "name": "Test Sync Movie",
-        "thumbnail": None,
-        "intro": "temporary insert test",
-        "label_list": "test",
-        "search_text": "Test Sync Movie temporary insert test",
-        "search_text_ascii": "test sync movie temporary insert test",
-        "source_page": None,
-        "source_api": "test",
-        "raw": {},
-        "synced_at": now,
-        "updated_at": now,
-    }]
+    if source == DRAMAWAVE_SOURCE:
+        payload = [{
+            "source_id": play_id,
+            "play_id": play_id,
+            "name": "Test Sync Movie",
+            "thumbnail": None,
+            "intro": "temporary insert test",
+            "label_list": "1 tap",
+            "episode_count": 1,
+            "search_text": "Test Sync Movie temporary insert test 1 tap",
+            "search_text_ascii": "test sync movie temporary insert test 1 tap",
+            "source_api": "test",
+            "source_cursor": "offset=0&position_index=10001",
+            "source_offset": 0,
+            "position_index": 10001,
+            "is_featured": False,
+            "raw": {},
+            "last_seen_at": now,
+            "synced_at": now,
+            "updated_at": now,
+        }]
+    else:
+        payload = [{
+            "source_id": play_id,
+            "play_id": play_id,
+            "name": "Test Sync Movie",
+            "thumbnail": None,
+            "intro": "temporary insert test",
+            "label_list": "test",
+            "search_text": "Test Sync Movie temporary insert test",
+            "search_text_ascii": "test sync movie temporary insert test",
+            "source_page": None,
+            "source_api": "test",
+            "raw": {},
+            "synced_at": now,
+            "updated_at": now,
+        }]
     base = supabase_url.rstrip("/")
     endpoint = f"{base}/rest/v1/{table}"
     headers = _supabase_headers(supabase_key)
     response = requests.post(endpoint, headers=headers, data=json.dumps(payload, ensure_ascii=False), timeout=60)
     response.raise_for_status()
+
+    if not delete_after:
+        return play_id
 
     delete_headers = _supabase_headers(supabase_key)
     delete_headers.pop("Content-Type", None)
@@ -405,14 +661,42 @@ def insert_new_supabase(movies: list[dict[str, Any]], supabase_url: str, supabas
     return total, len(movies) - len(new_movies)
 
 
+def upsert_movies_supabase(movies: list[dict[str, Any]], supabase_url: str, supabase_key: str,
+                           source: str, batch_size: int = 500, log_fn=None) -> int:
+    """Upsert normalized movies by play_id."""
+    if not movies:
+        return 0
+    base = supabase_url.rstrip("/")
+    endpoint = f"{base}/rest/v1/{source_table(source)}"
+    headers = _supabase_headers(supabase_key, prefer="resolution=merge-duplicates,return=minimal")
+    total = 0
+    for offset in range(0, len(movies), batch_size):
+        batch = movies[offset:offset + batch_size]
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            params={"on_conflict": "play_id"},
+            data=json.dumps(batch, ensure_ascii=False),
+            timeout=60,
+        )
+        response.raise_for_status()
+        total += len(batch)
+        if log_fn:
+            log_fn(f"Upserted batch: {total}/{len(movies)}")
+    return total
+
+
 def upsert_home_supabase(supabase_url: str, supabase_key: str,
                          source: str = NETSHORT_SOURCE) -> dict[str, int | str]:
     """Fetch /api/home and upsert rows so home metadata stays current."""
-    if source != NETSHORT_SOURCE:
+    if source == NETSHORT_SOURCE:
+        movies = fetch_home_movies()
+    elif source == DRAMAWAVE_SOURCE:
+        movies = fetch_dramawave_movies(max_pages=0)
+    else:
         source_name = str(MOVIE_SOURCES.get(source, {}).get("name", source))
         raise ValueError(f"Source {source_name} chua ho tro sync home.")
 
-    movies = fetch_home_movies()
     if not movies:
         return {
             "source": source,
@@ -422,23 +706,13 @@ def upsert_home_supabase(supabase_url: str, supabase_key: str,
             "upserted": 0,
         }
 
-    base = supabase_url.rstrip("/")
-    endpoint = f"{base}/rest/v1/{source_table(source)}"
-    headers = _supabase_headers(supabase_key, prefer="resolution=merge-duplicates,return=minimal")
-    response = requests.post(
-        endpoint,
-        headers=headers,
-        params={"on_conflict": "play_id"},
-        data=json.dumps(movies, ensure_ascii=False),
-        timeout=60,
-    )
-    response.raise_for_status()
+    upserted = upsert_movies_supabase(movies, supabase_url, supabase_key, source=source)
     return {
         "source": source,
         "source_name": str(MOVIE_SOURCES[source]["name"]),
         "table": source_table(source),
         "fetched": len(movies),
-        "upserted": len(movies),
+        "upserted": upserted,
     }
 
 
@@ -451,7 +725,7 @@ def sync_to_supabase(supabase_url: str, supabase_key: str, start_page: int = 2,
         if log_fn:
             log_fn(message)
 
-    if source != NETSHORT_SOURCE:
+    if source not in {NETSHORT_SOURCE, DRAMAWAVE_SOURCE}:
         source_name = str(MOVIE_SOURCES.get(source, {}).get("name", source))
         raise ValueError(f"Nguồn {source_name} chưa hỗ trợ sync.")
 
@@ -460,14 +734,20 @@ def sync_to_supabase(supabase_url: str, supabase_key: str, start_page: int = 2,
     table = source_table(source)
     before = supabase_count(supabase_url, supabase_key, source=source)
     log(f"{source_name} ({table}) hien co {before} phim.")
-    movies = fetch_movies(
-        start_page=start_page,
-        max_pages=max_pages,
-        pause=pause,
-        stop_after_no_new_pages=stop_after_no_new_pages,
-    )
-    log(f"Fetch API xong: {len(movies)} phim unique.")
-    inserted, skipped = insert_new_supabase(movies, supabase_url, supabase_key, source=source, log_fn=log)
+    if source == DRAMAWAVE_SOURCE:
+        movies = fetch_dramawave_movies(max_pages=max_pages, pause=max(pause, 0.35), log_fn=log)
+        log(f"Fetch DramaWave API xong: {len(movies)} phim unique.")
+        inserted = upsert_movies_supabase(movies, supabase_url, supabase_key, source=source, log_fn=log)
+        skipped = 0
+    else:
+        movies = fetch_movies(
+            start_page=start_page,
+            max_pages=max_pages,
+            pause=pause,
+            stop_after_no_new_pages=stop_after_no_new_pages,
+        )
+        log(f"Fetch API xong: {len(movies)} phim unique.")
+        inserted, skipped = insert_new_supabase(movies, supabase_url, supabase_key, source=source, log_fn=log)
     after = supabase_count(supabase_url, supabase_key, source=source)
     new_by_synced_at = supabase_count(
         supabase_url,
@@ -504,12 +784,13 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Fetch and print summary without Supabase insert.")
     parser.add_argument("--dump-json", type=Path, help="Write normalized movies to a JSON file.")
     parser.add_argument("--test-insert", action="store_true", help="Insert and delete one temporary row, then exit.")
+    parser.add_argument("--keep-test-row", action="store_true", help="Keep the --test-insert row for manual inspection.")
     args = parser.parse_args()
 
     supabase_url = os.environ.get("SUPABASE_URL", "").strip()
     supabase_key = os.environ.get("SUPABASE_KEY", "").strip()
 
-    if args.source != NETSHORT_SOURCE:
+    if args.source not in {NETSHORT_SOURCE, DRAMAWAVE_SOURCE}:
         print(f"Source {MOVIE_SOURCES[args.source]['name']} chưa hỗ trợ sync.", file=sys.stderr)
         return 2
 
@@ -517,8 +798,16 @@ def main() -> int:
         if not supabase_url or not supabase_key:
             print("Missing SUPABASE_URL or SUPABASE_KEY.", file=sys.stderr)
             return 2
-        play_id = test_insert_supabase(supabase_url=supabase_url, supabase_key=supabase_key)
-        print(f"Test insert OK: {play_id}")
+        play_id = test_insert_supabase(
+            supabase_url=supabase_url,
+            supabase_key=supabase_key,
+            source=args.source,
+            delete_after=not args.keep_test_row,
+        )
+        if args.keep_test_row:
+            print(f"Test insert OK, kept row: {play_id}")
+        else:
+            print(f"Test insert OK, deleted temp row: {play_id}")
         return 0
 
     if args.home_only:
@@ -534,12 +823,15 @@ def main() -> int:
 
     movies: list[dict[str, Any]] | None = None
     if args.dry_run or args.dump_json:
-        movies = fetch_movies(
-            start_page=args.start_page,
-            max_pages=args.max_pages,
-            pause=args.pause,
-            stop_after_no_new_pages=args.stop_after_no_new_pages,
-        )
+        if args.source == DRAMAWAVE_SOURCE:
+            movies = fetch_dramawave_movies(max_pages=args.max_pages, pause=max(args.pause, 0.35), log_fn=print)
+        else:
+            movies = fetch_movies(
+                start_page=args.start_page,
+                max_pages=args.max_pages,
+                pause=args.pause,
+                stop_after_no_new_pages=args.stop_after_no_new_pages,
+            )
         print(f"Fetched {len(movies)} unique movies.")
 
     if args.dump_json and movies is not None:

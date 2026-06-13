@@ -49,3 +49,12 @@ def _ns_cache_clear() -> int:
     count = len(_XS_FETCH_CACHE)
     _XS_FETCH_CACHE.clear()
     return count
+
+
+def _ns_cache_clear_source(source: str) -> int:
+    """Clear cache entries for one short-source only."""
+    prefix = f"{source}:"
+    keys = [key for key in _XS_FETCH_CACHE if key.startswith(prefix)]
+    for key in keys:
+        del _XS_FETCH_CACHE[key]
+    return len(keys)

@@ -13,7 +13,7 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QSettings
 
-from .cache import _NS_FETCH_CACHE_TTL, _ns_cache_clear, _ns_cache_evict_expired
+from .cache import _NS_FETCH_CACHE_TTL, _ns_cache_clear_source, _ns_cache_evict_expired
 from .dialogs import (
     XSDetailDialog,
     XSEpisodePickerDialog,
@@ -57,6 +57,12 @@ class XemShortTab(QtWidgets.QWidget):
 
     def settings(self) -> QSettings:
         return QSettings(_XS_APP_NAME, _XS_CONFIG_KEY)
+
+    def _cache_source(self) -> str:
+        return "netshort"
+
+    def _cache_source_name(self) -> str:
+        return "NetShort"
 
     @staticmethod
     def _setting_bool(settings: QSettings, key: str, default: bool) -> bool:
@@ -345,7 +351,8 @@ class XemShortTab(QtWidgets.QWidget):
             "QPushButton:hover { background-color: #991b1b; color: #ffffff; }"
             "QPushButton:pressed { background-color: #b91c1c; }")
         self.ns_clear_cache_btn.setToolTip(
-            f"Xóa cache fetch. Cache tự hết hạn sau {_NS_FETCH_CACHE_TTL // 60} phút.")
+            f"Xoa cache fetch cua {self._cache_source_name()}. "
+            f"Cache tu het han sau {_NS_FETCH_CACHE_TTL // 60} phut.")
         self.ns_clear_cache_btn.clicked.connect(self._ns_on_clear_cache)
         row2.addWidget(self.ns_clear_cache_btn)
 
@@ -534,9 +541,10 @@ class XemShortTab(QtWidgets.QWidget):
         QtWidgets.QMessageBox.critical(self, "Fetch lỗi", msg)
 
     def _ns_on_clear_cache(self):
-        count = _ns_cache_clear()
-        self.ns_status.setText(f"Đã xóa cache ({count} mục).")
-        self._log(f"[cache] Đã xóa {count} mục.")
+        source_name = self._cache_source_name()
+        count = _ns_cache_clear_source(self._cache_source())
+        self.ns_status.setText(f"Da xoa cache {source_name} ({count} muc).")
+        self._log(f"[cache] Da xoa {count} muc cua {source_name}.")
 
     def _ns_on_paste_json(self):
         from .helpers import _ns_parse_episodes
@@ -894,7 +902,7 @@ class XemShortTab(QtWidgets.QWidget):
         self._ns_block_movie_btns(row, True)
         self._save_settings()
 
-        worker = XSDownloadMergeWorker(
+        worker = self._create_download_worker(
             movie,
             concurrency=self.ns_concurrency_spin.value(),
             download_sub=self.ns_sub_checkbox.isChecked(),
@@ -935,6 +943,10 @@ class XemShortTab(QtWidgets.QWidget):
         worker.finished.connect(worker.deleteLater)
         self._ns_iterator = iterator
         worker.start()
+
+    def _create_download_worker(self, movie: XSMovie, **kwargs) -> XSDownloadMergeWorker:
+        """Create the per-source download worker. Subclasses can override."""
+        return XSDownloadMergeWorker(movie, **kwargs)
 
     def _ns_any_worker_running(self) -> bool:
         return any(worker.isRunning() for worker in self._ns_workers)
