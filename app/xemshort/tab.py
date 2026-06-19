@@ -585,7 +585,7 @@ class XemShortTab(QtWidgets.QWidget):
 
     def _ns_show_picker(self, episodes: list[XSEpisode], movie_name: str = "", movie_id: str = ""):
         name = movie_name or (episodes[0].name if episodes else "Unknown")
-        dlg = XSEpisodePickerDialog(name, episodes, self)
+        dlg = XSEpisodePickerDialog(name, episodes, self, source=self._cache_source())
         if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             selected = dlg.get_selected_episodes()
             save_dir = Path(self.ns_save_dir_edit.text() or ".")

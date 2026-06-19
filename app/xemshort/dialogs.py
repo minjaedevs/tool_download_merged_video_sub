@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import re
+import shutil
 import subprocess as sp
+import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -681,31 +685,148 @@ class _EpisodePreviewDownloadWorker(QtCore.QThread):
     success = QtCore.Signal(str)
     error = QtCore.Signal(str)
 
-    def __init__(self, url: str, episode: int, parent=None):
+    def __init__(self, url: str, episode: int, source: str = "", parent=None):
         super().__init__(parent)
         self.url = url
         self.episode = episode
+        self.source = source
+
+    @staticmethod
+    def _ffmpeg_path() -> Path | None:
+        for name in ("ffmpeg", "ffmpeg.exe"):
+            candidate = Path(sys.executable).parent / name
+            if candidate.exists():
+                return candidate
+        path = shutil.which("ffmpeg")
+        return Path(path) if path else None
+
+    def _headers_for_url(self) -> dict[str, str]:
+        from .workers import NETSHORT_DOWNLOAD_HEADERS
+
+        headers = dict(NETSHORT_DOWNLOAD_HEADERS)
+        if self._is_phimngan_preview():
+            headers.update({
+                "Referer": "https://phimngan.tv/",
+                "Origin": "https://phimngan.tv",
+            })
+        return headers
+
+    def _is_phimngan_preview(self) -> bool:
+        return self.source == "phimngan"
+
+    @staticmethod
+    def _ffmpeg_headers(headers: dict[str, str]) -> str:
+        return "".join(f"{key}: {value}\r\n" for key, value in headers.items())
+
+    def _download_hls_preview(self, out_path: Path, headers: dict[str, str]) -> None:
+        ffmpeg_path = self._ffmpeg_path()
+        if not ffmpeg_path:
+            raise RuntimeError("Can ffmpeg de preview HLS/m3u8.")
+
+        part_path = out_path.with_suffix(out_path.suffix + ".part")
+        part_path.unlink(missing_ok=True)
+        cmd = [
+            str(ffmpeg_path),
+            "-y",
+            "-loglevel", "warning",
+            "-headers", self._ffmpeg_headers(headers),
+            "-protocol_whitelist", "file,http,https,tcp,tls,crypto,data",
+            "-allowed_extensions", "ALL",
+            "-allowed_segment_extensions", "ALL",
+            "-extension_picky", "0",
+            "-i", self.url,
+            "-map", "0:v:0?",
+            "-map", "0:a:0?",
+            "-c", "copy",
+            "-bsf:a", "aac_adtstoasc",
+            "-t", "120",
+            str(part_path),
+        ]
+        flags = {"creationflags": sp.CREATE_NO_WINDOW} if platform.system() == "Windows" else {}
+        err_path = part_path.with_suffix(part_path.suffix + ".stderr.txt")
+        err_path.unlink(missing_ok=True)
+        err_file = err_path.open("w", encoding="utf-8", errors="replace")
+        process = sp.Popen(
+            cmd,
+            stdout=sp.DEVNULL,
+            stderr=err_file,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **flags,
+        )
+        try:
+            started_at = time.monotonic()
+            while process.poll() is None:
+                if self.isInterruptionRequested():
+                    process.terminate()
+                    try:
+                        process.wait(timeout=3)
+                    except sp.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    part_path.unlink(missing_ok=True)
+                    raise RuntimeError("Da huy preview HLS.")
+                if time.monotonic() - started_at > 180:
+                    process.kill()
+                    process.wait()
+                    part_path.unlink(missing_ok=True)
+                    raise RuntimeError("TIMEOUT preview HLS.")
+                self.msleep(100)
+        finally:
+            err_file.close()
+        stderr = err_path.read_text(encoding="utf-8", errors="replace") if err_path.exists() else ""
+        err_path.unlink(missing_ok=True)
+        result_code = process.returncode
+        if result_code != 0:
+            part_path.unlink(missing_ok=True)
+            raise RuntimeError(stderr[:500] or "ffmpeg preview HLS failed")
+        if not part_path.exists() or part_path.stat().st_size <= 1024:
+            part_path.unlink(missing_ok=True)
+            raise RuntimeError("ffmpeg preview HLS output rong")
+        part_path.replace(out_path)
 
     def run(self):
         try:
-            from .workers import NETSHORT_DOWNLOAD_HEADERS
-
             tmp_dir = Path(tempfile.gettempdir()) / "yt_dlp_gui_xemshort_preview"
             tmp_dir.mkdir(parents=True, exist_ok=True)
             out_path = tmp_dir / f"preview_ep_{self.episode}_{abs(hash(self.url))}.mp4"
             if out_path.exists() and out_path.stat().st_size > 0:
-                self.success.emit(str(out_path))
-                return
+                if not self._is_phimngan_preview() or _ns_get_video_duration_secs(out_path):
+                    self.success.emit(str(out_path))
+                    return
+                out_path.unlink(missing_ok=True)
 
+            headers = self._headers_for_url()
             with requests.get(
                 self.url,
-                headers=NETSHORT_DOWNLOAD_HEADERS,
+                headers=headers,
                 stream=True,
                 timeout=(15, 120),
             ) as response:
                 response.raise_for_status()
                 part_path = out_path.with_suffix(out_path.suffix + ".part")
+                first_chunk = b""
+                if self._is_phimngan_preview():
+                    content_type = response.headers.get("Content-Type", "").lower()
+                    first_chunk = next(response.iter_content(chunk_size=1024 * 64), b"")
+                    looks_like_hls = (
+                        b"#EXTM3U" in first_chunk[:2048]
+                        or "mpegurl" in content_type
+                        or "vnd.apple.mpegurl" in content_type
+                        or ".m3u8" in self.url.lower()
+                        or ".m3u" in self.url.lower()
+                    )
+                    if looks_like_hls:
+                        response.close()
+                        part_path.unlink(missing_ok=True)
+                        self._download_hls_preview(out_path, headers)
+                        self.success.emit(str(out_path))
+                        return
+
                 with part_path.open("wb") as fh:
+                    if first_chunk:
+                        fh.write(first_chunk)
                     for chunk in response.iter_content(chunk_size=1024 * 512):
                         if self.isInterruptionRequested():
                             return
@@ -722,9 +843,10 @@ class _EpisodePreviewDownloadWorker(QtCore.QThread):
 class XSEpisodePickerDialog(QtWidgets.QDialog):
     """Dialog for selecting which episodes to add to the download queue."""
 
-    def __init__(self, movie_name: str, episodes: list[XSEpisode], parent=None):
+    def __init__(self, movie_name: str, episodes: list[XSEpisode], parent=None, source: str = ""):
         super().__init__(parent)
         self.episodes = episodes
+        self.source = source
         self.setWindowTitle(f"Chọn tập - {movie_name}")
         self.resize(820, 650)
 
@@ -865,7 +987,7 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
 
-        worker = _EpisodePreviewDownloadWorker(ep.play, ep.episode, dlg)
+        worker = _EpisodePreviewDownloadWorker(ep.play, ep.episode, source=self.source, parent=dlg)
         dlg._preview_worker = worker
         dlg._preview_player = None
         dlg._preview_audio = None
