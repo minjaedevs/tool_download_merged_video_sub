@@ -1,4 +1,4 @@
-"""DramaWave downloader tab cloned from XemShortTab with source-specific fetch/search."""
+"""phimngan.tv downloader tab cloned from NetShort with source-specific fetch."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,36 +6,39 @@ from pathlib import Path
 from PySide6 import QtWidgets
 from PySide6.QtCore import QSettings
 
-from .movie_search_dialog import DramaWaveMovieSearchDialog
-from .models import XSEpisode, XSMovie
-from .tab import XemShortTab
-from .workers import DramaWaveDownloadMergeWorker, DramaWaveFetchWorker
+from xemshort.models import XSEpisode, XSMovie
+from xemshort.tab import XemShortTab
+
+from .workers import PhimNganDownloadMergeWorker, PhimNganFetchWorker
 
 
-_DW_APP_NAME = "XemShort GUI"
-_DW_CONFIG_KEY = "DramaWave"
-DRAMAWAVE_API_URL = "https://api.xemshort.top/allepisode?shortPlayId={movie_id}"
+_PN_APP_NAME = "XemShort GUI"
+_PN_CONFIG_KEY = "PhimNgan"
+PHIMNGAN_API_URL = "https://phimngan.tv/movies/{movie_id}?_rsc=h1khq"
 
 
-class DramaWaveTab(XemShortTab):
-    """DramaWave variant of the XemShort downloader UI."""
+class PhimNganTab(XemShortTab):
+    """phimngan.tv variant of the XemShort downloader UI."""
 
     def settings(self) -> QSettings:
-        return QSettings(_DW_APP_NAME, _DW_CONFIG_KEY)
+        return QSettings(_PN_APP_NAME, _PN_CONFIG_KEY)
 
     def _cache_source(self) -> str:
-        return "dramawave"
+        return "phimngan"
 
     def _cache_source_name(self) -> str:
-        return "DramaWave"
+        return "phimngan.tv"
 
     def _load_settings(self):
         s = self.settings()
         self.ns_save_dir_edit.setText(
-            s.value("save_dir", str(Path.home() / "Downloads" / "DramaWave")))
-        self.ns_api_url_edit.setText(
-            s.value("api_url", DRAMAWAVE_API_URL))
-        self.ns_api_url_edit.setPlaceholderText(DRAMAWAVE_API_URL)
+            s.value("save_dir", str(Path.home() / "Downloads" / "PhimNgan")))
+        self.ns_api_url_edit.setText(s.value("api_url", PHIMNGAN_API_URL))
+        self.ns_api_url_edit.setPlaceholderText(PHIMNGAN_API_URL)
+        self.ns_movie_id_edit.setPlaceholderText(
+            "phan-quan-vuong-phi-du-dan hoặc https://phimngan.tv/movies/..."
+        )
+        self.ns_search_movie_btn.setText("Huong dan")
         self.ns_concurrency_spin.setValue(int(s.value("concurrency", 4)))
         self.ns_sub_checkbox.setChecked(self._setting_bool(s, "download_sub", True))
         self.ns_merge_checkbox.setChecked(self._setting_bool(s, "do_merge", True))
@@ -53,19 +56,16 @@ class DramaWaveTab(XemShortTab):
         self.ns_sub_italic_cb.setChecked(self._setting_bool(s, "sub_italic", False))
 
     def _ns_on_search_movie(self):
-        dlg = DramaWaveMovieSearchDialog(self)
-        if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
-            play_id = dlg.selected_play_id()
-            if play_id:
-                self.ns_movie_id_edit.setText(play_id)
-                self.ns_movie_id_edit.setFocus()
-                self.ns_status.setText(f"Da chon DramaWave movie id: {play_id}")
-                self._log(f"[dramawave search] selected play_id={play_id}")
+        QtWidgets.QMessageBox.information(
+            self,
+            "phimngan.tv",
+            "Nhap slug phim hoac URL phimngan.tv/movies/... de fetch.",
+        )
 
     def _ns_on_fetch(self):
-        movie_id = self.ns_movie_id_edit.text().strip()
-        if not movie_id:
-            QtWidgets.QMessageBox.warning(self, "Thieu input", "Vui long nhap Movie ID.")
+        slug = self.ns_movie_id_edit.text().strip()
+        if not slug:
+            QtWidgets.QMessageBox.warning(self, "Thieu input", "Vui long nhap slug phim.")
             return
         api_url = self.ns_api_url_edit.text().strip()
         if not api_url.startswith(("http://", "https://")):
@@ -75,11 +75,12 @@ class DramaWaveTab(XemShortTab):
                 "API URL phai bat dau bang http:// hoac https://.",
             )
             return
-        self.ns_fetch_btn.setEnabled(False)
-        self.ns_status.setText(f"Dang fetch DramaWave {movie_id}...")
-        self._log(f"Fetching DramaWave {movie_id}...")
 
-        worker = DramaWaveFetchWorker(api_url, movie_id)
+        self.ns_fetch_btn.setEnabled(False)
+        self.ns_status.setText(f"Dang fetch phimngan.tv {slug}...")
+        self._log(f"Fetching phimngan.tv {slug}...")
+
+        worker = PhimNganFetchWorker(api_url, slug)
         self._fetch_instance_id = worker.instance_id
         self._fetch_workers.append(worker)
 
@@ -98,9 +99,9 @@ class DramaWaveTab(XemShortTab):
         if instance_id != self._fetch_instance_id:
             return
         name = movie_name or (episodes[0].name if episodes else "Unknown")
-        self.ns_status.setText(f"Fetched DramaWave {len(episodes)} tap.")
-        self._log(f"Fetched DramaWave {len(episodes)} tap.")
+        self.ns_status.setText(f"Fetched phimngan.tv {len(episodes)} tap.")
+        self._log(f"Fetched phimngan.tv {len(episodes)} tap.")
         self._ns_show_picker(episodes, name, movie_id)
 
-    def _create_download_worker(self, movie: XSMovie, **kwargs) -> DramaWaveDownloadMergeWorker:
-        return DramaWaveDownloadMergeWorker(movie, **kwargs)
+    def _create_download_worker(self, movie: XSMovie, **kwargs) -> PhimNganDownloadMergeWorker:
+        return PhimNganDownloadMergeWorker(movie, **kwargs)

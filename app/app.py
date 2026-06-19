@@ -21,6 +21,7 @@ from ui.main_window import Ui_MainWindow
 from utils import BIN_DIR, ROOT, load_toml, save_toml
 from update_version import Updater
 from xemshort import DramaWaveTab, MovieManagerTab, XemShortTab
+from phimngan import PhimNganTab
 from m3u8.m3utab import M3U8ProTab, M3U8Tab
 from kkphim1.kkphimtab import KkPhimTab
 from nguonc.nguonctab import NguoncTab
@@ -80,6 +81,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Tab 2: DramaWave
         dramawave_tab = DramaWaveTab()
         tab_widget.addTab(dramawave_tab, "DramaWave")
+
+        phimngan_tab = PhimNganTab()
+        tab_widget.addTab(phimngan_tab, "phimngan.tv")
 
         # Tab: Movie Manager (ẩn tạm, bật lại khi cần quản lý/sync movie)
         # movie_tab = MovieManagerTab()
