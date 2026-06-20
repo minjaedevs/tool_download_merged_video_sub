@@ -10,6 +10,7 @@ from xemshort.models import XSEpisode, XSMovie
 from xemshort.tab import XemShortTab
 
 from .workers import PhimNganDownloadMergeWorker, PhimNganFetchWorker
+from .movie_search_dialog import PhimNganMovieSearchDialog
 
 
 _PN_APP_NAME = "XemShort GUI"
@@ -38,7 +39,7 @@ class PhimNganTab(XemShortTab):
         self.ns_movie_id_edit.setPlaceholderText(
             "phan-quan-vuong-phi-du-dan hoặc https://phimngan.tv/movies/..."
         )
-        self.ns_search_movie_btn.setText("Huong dan")
+        self.ns_search_movie_btn.setText("Tim kiem")
         self.ns_concurrency_spin.setValue(int(s.value("concurrency", 4)))
         self.ns_sub_checkbox.setChecked(self._setting_bool(s, "download_sub", True))
         self.ns_merge_checkbox.setChecked(self._setting_bool(s, "do_merge", True))
@@ -54,13 +55,50 @@ class PhimNganTab(XemShortTab):
         self.ns_sub_color_combo.setCurrentText(s.value("sub_color", default_color))
         self.ns_sub_bold_cb.setChecked(self._setting_bool(s, "sub_bold", True))
         self.ns_sub_italic_cb.setChecked(self._setting_bool(s, "sub_italic", False))
+        self.ns_force_api_cb.setChecked(self._setting_bool(s, "force_api", False))
+
+    def _build_ui(self):
+        # Create force_api checkbox BEFORE super() because _load_settings() inside
+        # super()._build_ui() will try to access self.ns_force_api_cb.
+        self.ns_force_api_cb = QtWidgets.QCheckBox("Goi API truc tiep (bo qua Supabase DB)")
+        self.ns_force_api_cb.setToolTip(
+            "Neu check: goi API phimngan.tv truc tiep, khong tra cuu Supabase.\n"
+            "Bo check (mac dinh): tra cuu Supabase truoc, chi goi API khi khong tim thay."
+        )
+        self.ns_force_api_cb.setStyleSheet(
+            "QCheckBox { color: #d1d5db; font-weight: bold; spacing: 6px; }"
+            "QCheckBox::indicator { width: 16px; height: 16px; }"
+        )
+
+        super()._build_ui()
+
+        # Inject checkbox into the "Thêm phim" groupbox between row1 and row2
+        for child in self.children():
+            if isinstance(child, QtWidgets.QGroupBox) and child.title() == "Thêm phim":
+                inp_layout = child.layout()
+                if inp_layout is not None and inp_layout.count() >= 2:
+                    api_row = QtWidgets.QHBoxLayout()
+                    api_row.setSpacing(10)
+                    api_row.addWidget(self.ns_force_api_cb)
+                    api_row.addStretch()
+                    inp_layout.addLayout(api_row)
+                break
+
+        # Load saved checkbox state
+        self.ns_force_api_cb.setChecked(
+            self._setting_bool(self.settings(), "force_api", False)
+        )
+        self.ns_force_api_cb.toggled.connect(lambda *_: self._save_settings())
 
     def _ns_on_search_movie(self):
-        QtWidgets.QMessageBox.information(
-            self,
-            "phimngan.tv",
-            "Nhap slug phim hoac URL phimngan.tv/movies/... de fetch.",
-        )
+        dlg = PhimNganMovieSearchDialog(self)
+        if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            slug, name = dlg.get_result()
+            if slug:
+                self.ns_movie_id_edit.setText(slug)
+                self.ns_movie_id_edit.setFocus()
+                self.ns_status.setText(f"Da chon: {name} ({slug})")
+                self._log(f"[search] selected slug={slug}, name={name}")
 
     def _ns_on_fetch(self):
         slug = self.ns_movie_id_edit.text().strip()
@@ -80,7 +118,7 @@ class PhimNganTab(XemShortTab):
         self.ns_status.setText(f"Dang fetch phimngan.tv {slug}...")
         self._log(f"Fetching phimngan.tv {slug}...")
 
-        worker = PhimNganFetchWorker(api_url, slug)
+        worker = PhimNganFetchWorker(api_url, slug, force_api=self.ns_force_api_cb.isChecked())
         self._fetch_instance_id = worker.instance_id
         self._fetch_workers.append(worker)
 
