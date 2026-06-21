@@ -15,6 +15,17 @@ if exist dist\tool-download-movie.exe (
     set "RELEASE_DIR=D:\sports_data\yt-dlp-gui\app\release\tool-download-movie-pro-v!VERSION!"
     if not exist "!RELEASE_DIR!" mkdir "!RELEASE_DIR!"
     copy /y dist\tool-download-movie.exe "!RELEASE_DIR!\tool-download-movie.exe"
+
+    :: Copy ffmpeg, ffprobe, fonts vao dist de san san dong goi
+    copy /y "!RELEASE_DIR!\ffmpeg.exe" "dist\ffmpeg.exe" 2>nul
+    copy /y "!RELEASE_DIR!\ffprobe.exe" "dist\ffprobe.exe" 2>nul
+    if exist "!RELEASE_DIR!\fonts" (
+        if not exist "dist\fonts" mkdir "dist\fonts"
+        xcopy /s /y "!RELEASE_DIR!\fonts" "dist\fonts\" >nul
+    )
+
+    echo === Contents of dist ===
+    dir /b dist
     echo Build completed. Copied to !RELEASE_DIR!
     endlocal
 ) else (

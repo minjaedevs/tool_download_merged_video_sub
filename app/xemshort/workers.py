@@ -340,6 +340,12 @@ class XSDownloadMergeWorker(QtCore.QThread):
             "preset":   self.ffpreset,
         }
 
+    def _subtitle_outline(self) -> float:
+        return 1.0
+
+    def _subtitle_shadow(self) -> float:
+        return 0.0
+
     def _episode_base_name(self, ep: XSEpisode) -> str:
         padding = len(str(self.movie.total))
         return f"ep{str(ep.episode).zfill(padding)}"
@@ -563,8 +569,11 @@ class XSDownloadMergeWorker(QtCore.QThread):
         tmp_sub_dir = Path(tempfile.gettempdir()) / "yt_dlp_gui_xemshort_subs" / str(self.instance_id)
         tmp_sub_dir.mkdir(parents=True, exist_ok=True)
         tmp_ass_path = tmp_sub_dir / f"{base}.ass"
+        sub_outline = self._subtitle_outline()
+        sub_shadow = self._subtitle_shadow()
         sub_for_ffmpeg = _ns_convert_sub_to_ass(
-            ep.sub_path, self.sub_font, self.sub_size, ass_path=tmp_ass_path
+            ep.sub_path, self.sub_font, self.sub_size,
+            outline=sub_outline, ass_path=tmp_ass_path
         )
         if sub_for_ffmpeg == ep.sub_path:
             ep.merge_note = "no_sub"
@@ -604,7 +613,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 f":force_style='FontName={self.sub_font},FontSize={self.sub_size},"
                 f"PrimaryColour={_ns_color_to_ass(self.sub_color)},"
                 f"OutlineColour=&H00000000,"
-                f"BorderStyle=1,Outline=1,Shadow=0,"
+                f"BorderStyle=1,Outline={sub_outline:g},Shadow={sub_shadow:g},"
                 f"Bold={-1 if self.sub_bold else 0},"
                 f"Italic={1 if self.sub_italic else 0},"
                 f"Alignment=2,MarginV={self.sub_margin_v}'"
@@ -616,7 +625,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 f"'FontName={self.sub_font},FontSize={self.sub_size},"
                 f"PrimaryColour={_ns_color_to_ass(self.sub_color)},"
                 f"OutlineColour=&H00000000,"
-                f"BorderStyle=1,Outline=1,Shadow=0,"
+                f"BorderStyle=1,Outline={sub_outline:g},Shadow={sub_shadow:g},"
                 f"Bold={-1 if self.sub_bold else 0},"
                 f"Italic={1 if self.sub_italic else 0},"
                 f"Alignment=2,MarginV={self.sub_margin_v}'"

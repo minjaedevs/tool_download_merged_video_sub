@@ -304,6 +304,17 @@ class PhimNganDownloadMergeWorker(DramaWaveDownloadMergeWorker):
 
     subtitle_error_source = "phimngan"
 
+    def _subtitle_outline(self) -> float:
+        # PhimNgan videos are usually vertical HLS encodes; the NetShort outline
+        # can render too thin after scaling, so make the burn-in border explicit.
+        return 3.8
+
+    def _settings_fingerprint(self) -> dict:
+        settings = super()._settings_fingerprint()
+        settings["outline"] = self._subtitle_outline()
+        settings["style_version"] = 3
+        return settings
+
     def _download_hls_video(self, url: str, output: Path, desc: str) -> bool:
         """Let ffmpeg read the remote playlist so absolute-relative CDN paths resolve."""
         if output.exists() and output.stat().st_size > 1024:
@@ -335,7 +346,43 @@ class PhimNganDownloadMergeWorker(DramaWaveDownloadMergeWorker):
             "Referer: https://phimngan.tv/\r\n"
             "Origin: https://phimngan.tv\r\n"
         )
-        cmd = [
+
+        def _run_ffmpeg(cmd: list[str]) -> bool:
+            try:
+                _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if platform.system() == "Windows" else {}
+                result = sp.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=900,
+                    **_cflags,
+                )
+                if result.returncode != 0:
+                    stderr = result.stderr or ""
+                    if "Unrecognized option" in stderr or "Option not found" in stderr:
+                        return None  # signal: retry without advanced options
+                    self.log(f"ffmpeg tai HLS loi {desc}: {stderr[:500]}")
+                    tmp.unlink(missing_ok=True)
+                    return False
+                if not tmp.exists() or tmp.stat().st_size <= 1024:
+                    self.log(f"ffmpeg tai HLS loi {desc}: output rong")
+                    tmp.unlink(missing_ok=True)
+                    return False
+                tmp.replace(output)
+                self.log(f"{desc} OK (HLS -> MP4, {output.stat().st_size} bytes)")
+                return True
+            except sp.TimeoutExpired:
+                self.log(f"TIMEOUT {desc} (HLS)")
+                tmp.unlink(missing_ok=True)
+                return False
+            except Exception as exc:
+                self.log(f"LOI {desc} (HLS): {exc}")
+                tmp.unlink(missing_ok=True)
+                return False
+
+        cmd_full = [
             str(ffmpeg_path),
             "-y",
             "-loglevel", "warning",
@@ -351,31 +398,27 @@ class PhimNganDownloadMergeWorker(DramaWaveDownloadMergeWorker):
             "-bsf:a", "aac_adtstoasc",
             str(tmp),
         ]
-        try:
-            _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if platform.system() == "Windows" else {}
-            result = sp.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=900,
-                **_cflags,
-            )
-            if result.returncode != 0:
-                self.log(f"ffmpeg tai HLS loi {desc}: {result.stderr[:500]}")
-                tmp.unlink(missing_ok=True)
-                return False
-            if not tmp.exists() or tmp.stat().st_size <= 1024:
-                self.log(f"ffmpeg tai HLS loi {desc}: output rong")
-                tmp.unlink(missing_ok=True)
-                return False
-            tmp.replace(output)
-            self.log(f"{desc} OK (HLS -> MP4, {output.stat().st_size} bytes)")
-            return True
-        except sp.TimeoutExpired:
-            self.log(f"TIMEOUT {desc} (HLS)")
-        except Exception as exc:
-            self.log(f"LOI {desc} (HLS): {exc}")
-        tmp.unlink(missing_ok=True)
-        return False
+
+        # Fallback: strip unsupported options for older ffmpeg
+        cmd_basic = [
+            str(ffmpeg_path),
+            "-y",
+            "-loglevel", "warning",
+            "-headers", headers,
+            "-protocol_whitelist", "file,http,https,tcp,tls,crypto,data",
+            "-i", url,
+            "-map", "0:v:0?",
+            "-map", "0:a:0?",
+            "-c", "copy",
+            "-bsf:a", "aac_adtstoasc",
+            str(tmp),
+        ]
+
+        # First attempt with advanced options
+        result = _run_ffmpeg(cmd_full)
+        if result is None:
+            # Old ffmpeg: retry without -allowed_extensions / -allowed_segment_extensions / -extension_picky
+            self.log(f"ffmpeg cu — thu lai khong options HLS nang cao...")
+            result = _run_ffmpeg(cmd_basic)
+
+        return bool(result)
