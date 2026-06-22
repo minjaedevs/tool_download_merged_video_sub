@@ -51,6 +51,7 @@ class DramaWaveTab(XemShortTab):
         self.ns_sub_color_combo.setCurrentText(s.value("sub_color", default_color))
         self.ns_sub_bold_cb.setChecked(self._setting_bool(s, "sub_bold", True))
         self.ns_sub_italic_cb.setChecked(self._setting_bool(s, "sub_italic", False))
+        self.ns_sub_outline_spin.setValue(float(s.value("sub_outline", 1.0)))
 
     def _ns_on_search_movie(self):
         dlg = DramaWaveMovieSearchDialog(self)

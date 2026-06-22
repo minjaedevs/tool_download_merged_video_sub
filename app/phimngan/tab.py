@@ -55,18 +55,19 @@ class PhimNganTab(XemShortTab):
         self.ns_sub_color_combo.setCurrentText(s.value("sub_color", default_color))
         self.ns_sub_bold_cb.setChecked(self._setting_bool(s, "sub_bold", True))
         self.ns_sub_italic_cb.setChecked(self._setting_bool(s, "sub_italic", False))
+        self.ns_sub_outline_spin.setValue(float(s.value("sub_outline", 2.0)))
         self.ns_force_api_cb.setChecked(self._setting_bool(s, "force_api", False))
 
     def _build_ui(self):
         # Create force_api checkbox BEFORE super() because _load_settings() inside
         # super()._build_ui() will try to access self.ns_force_api_cb.
-        self.ns_force_api_cb = QtWidgets.QCheckBox("Goi API truc tiep (bo qua Supabase DB)")
+        self.ns_force_api_cb = QtWidgets.QCheckBox("Goi API truc tiep từ phimngan.tv")
         self.ns_force_api_cb.setToolTip(
             "Neu check: goi API phimngan.tv truc tiep, khong tra cuu Supabase.\n"
             "Bo check (mac dinh): tra cuu Supabase truoc, chi goi API khi khong tim thay."
         )
         self.ns_force_api_cb.setStyleSheet(
-            "QCheckBox { color: #d1d5db; font-weight: bold; spacing: 6px; }"
+            "QCheckBox { color: #0D0D0E; font-weight: bold; spacing: 6px; }"
             "QCheckBox::indicator { width: 16px; height: 16px; }"
         )
 

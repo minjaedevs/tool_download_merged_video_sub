@@ -1,0 +1,16 @@
+Full regex matches: 0
+Minimal regex matches: 30
+No-desc regex matches: 0
+
+Description context (raw):
+Description: "description":"Giang Nghê kết hôn với một người chồng nghiêm túc. Không ngờ, cô lại thấy anh là người hoàn hảo. Giữ rõ ranh giới, cô đối với chồng như cộng sự. Nhưng rồi, mọi thứ thay đổi vào một đêm nọ, khi anh bắt đầu khao khát trái tim cô. Chuyển thể từ tiểu thuyết “Kinh Hôn Bất Thục” của tác giả Nịch Chu.
+
+Context around 'Kinh Hon':
+'khao khát trái tim cô. Chuyển thể từ tiểu thuyết “Kinh Hôn Bất Thục” của tác giả Nịch Chu.","tags":"","cover":"https://cdn.phimngan.xyz/covers/f609ecca-acf8-40c7-a393-660739433715.jpg","episodeCount":'
+
+Movie object start: '{"id":"f609ecca-acf8-40c7-a393-660739433715","titl'
+Full object (828 chars):
+{"id":"f609ecca-acf8-40c7-a393-660739433715","title":"Ép Gả Một Thời, Duyên Tình Một Kiếp","slug":"ep-ga-mot-thoi-duyen-tinh-mot-kiep","description":"Giang Nghê kết hôn với một người chồng nghiêm túc. Không ngờ, cô lại thấy anh là người hoàn hảo. Giữ rõ ranh giới, cô đối với chồng như cộng sự. Nhưng rồi, mọi thứ thay đổi vào một đêm nọ, khi anh bắt đầu khao khát trái tim cô. Chuyển thể từ tiểu thuyết “Kinh Hôn Bất Thục” của tác giả Nịch Chu.","tags":"","cover":"https://cdn.phimngan.xyz/covers/f6
+...se,"releaseDate":null,"createdAt":"2025-07-04T06:57:34.882Z","updatedAt":"2026-06-20T08:05:17.105Z"}
+JSON parsed OK!
+Keys: ['id', 'title', 'slug', 'description', 'tags', 'cover', 'episodeCount', 'totalEpisode', 'viewCount', 'favoriteCount', 'commentCount', 'status', 'originId', 'isFeatured', 'isHot', 'isUserOnly', 'releaseDate', 'createdAt', 'updatedAt']

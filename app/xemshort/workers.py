@@ -263,6 +263,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
                  sub_font: str = "UTM Alter Gothic", sub_size: int = 20,
                  sub_margin_v: int = 30, sub_color: str = "Trắng",
                  sub_bold: bool = True, sub_italic: bool = False,
+                 sub_outline: float = 1.0,
                  convert_m3u8: bool = False,
                  m3u8_reencode: bool = False):
         """Configure worker with movie data, thread count, and ffmpeg encode settings."""
@@ -283,6 +284,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
         self.sub_color = sub_color
         self.sub_bold = sub_bold
         self.sub_italic = sub_italic
+        self.sub_outline = sub_outline
         self._stop = threading.Event()
         # Unique ID so stale signals from a previous worker are ignored
         import uuid
@@ -341,7 +343,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
         }
 
     def _subtitle_outline(self) -> float:
-        return 1.0
+        return self.sub_outline
 
     def _subtitle_shadow(self) -> float:
         return 0.0

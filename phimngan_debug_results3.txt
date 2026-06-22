@@ -1,0 +1,6 @@
+Movie regex matches: 0
+
+Simple id+title+slug regex matches: 30
+  [0] {"id":"f609ecca-acf8-40c7-a393-660739433715","title":"Ép Gả Một Thời, Duyên Tình Một Kiếp","slug":"ep-ga-mot-thoi-duyen-tinh-mot-kiep"
+  [1] {"id":"097b6bfb-6672-4259-9a2a-2587008b5ee9","title":"Vĩnh Biệt, Những Người Anh Của Em","slug":"vinh-biet-nhung-nguoi-anh-cua-em"
+  [2] {"id":"f34d412b-aa1c-4981-8830-8c8544668266","title":"Phá Lệ Mà Cưng Chiều","slug":"ph-l-m-cng-chiu"

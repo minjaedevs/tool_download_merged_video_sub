@@ -1,0 +1,44 @@
+slugs: 180
+ids+titles: 30
+episodeCount: 30
+views: 0
+likes: 0
+comments: 0
+isHot: 30
+isFeatured: 30
+isVoice: 0
+updatedAt: 180
+cover: 30
+
+=== First 3 movies ===
+  [0] id=f609ecca-acf8-40c7-a393-660739433715
+       title=Ép Gả Một Thời, Duyên Tình Một Kiếp
+       episodeCount=80
+       updatedAt=2025-05-30T19:47:00.719Z
+  [1] id=097b6bfb-6672-4259-9a2a-2587008b5ee9
+       title=Vĩnh Biệt, Những Người Anh Của Em
+       episodeCount=51
+       updatedAt=2025-05-30T19:47:00.730Z
+  [2] id=f34d412b-aa1c-4981-8830-8c8544668266
+       title=Phá Lệ Mà Cưng Chiều
+       episodeCount=63
+       updatedAt=2025-05-30T19:47:00.736Z
+
+=== Context around first movie ===
+:"2025-10-26T07:38:24.480Z"}],"initialLimit":10}],["$","$L10",null,{"titleAs":"h1","data":{"data":[{"id":"f609ecca-acf8-40c7-a393-660739433715","title":"Ép Gả Một Thời, Duyên Tình Một Kiếp","slug":"ep-ga-mot-thoi-duyen-tinh-mot-kiep","description":"Giang Nghê kết hôn với một người chồng nghiêm túc. Không ngờ, cô lại thấy anh là người hoàn hảo. Giữ rõ ranh giới, cô đối với chồng như cộng sự. Nhưng rồi, mọi thứ thay đổi vào một đêm nọ, khi anh bắt đầu khao khát trái tim cô. Chuyển thể từ tiểu thuyết “Kinh Hôn Bất Thục” của tác giả Nịch Chu.","tags":"","cover":"https://cdn.phimngan.xyz/covers/f609ecca-acf8-40c7-a393-660739433715.jpg","episodeCount":80,"totalEpisode":80,"viewCount":1347189,"favo
+
+=== Field patterns around movies ===
+Total segments with id+title: 30
+
+--- Segment 0 ---
+{"data":[{"id":"f609ecca-acf8-40c7-a393-660739433715","title":"Ép Gả Một Thời, Duyên Tình Một Kiếp","slug":"ep-ga-mot-thoi-duyen-tinh-mot-kiep","description":"Giang Nghê kết hôn với một người chồng nghiêm túc. Không ngờ, cô lại thấy anh là người hoàn hảo. Giữ rõ ranh giới, cô đối với chồng như cộng sự. Nhưng rồi, mọi thứ thay đổi vào một đêm nọ, khi anh bắt đầu khao khát trái tim cô. Chuyển thể từ tiểu thuyết “Kinh Hôn Bất Thục” của tác giả Nịch Chu.","tags":"","cover":"https://cdn.phimngan.xyz/covers/f609ecca-acf8-40c7-a393-660739433715.jpg","episodeCount":80,"totalEpisode":80,"viewCount":13
+
+--- Segment 1 ---
+7.105Z"},{"id":"097b6bfb-6672-4259-9a2a-2587008b5ee9","title":"Vĩnh Biệt, Những Người Anh Của Em","slug":"vinh-biet-nhung-nguoi-anh-cua-em","description":"Nam Cung Tinh – cô gái mồ côi từng được ba người anh yêu thương sau khi được gia tộc Nam Cung nhận nuôi. Khi con gái ruột trở về, cô bị ghẻ lạnh, chọn tham gia “Dự án Ngủ Sao” – ngủ đông 30 năm và hiến giác mạc cho anh trai. Ba thập kỷ sau tỉnh dậy, cô đã mất toàn bộ ký ức.","tags":"","cover":"https://cdn.phimngan.xyz/covers/097b6bfb-6672-4259-9a2a-2587008b5ee9.jpg","episodeCount":51,"totalEpisode":51,"viewCount":1233457,"favoriteCount":7
+
+=== Context around first slug ===
+0%)]"}],["$","$La",null,{"genres":[{"id":"5f0fc550-c60e-4b7e-8fe1-61c8896d9e70","name":"Siêu cường","slug":"sieu-cuong","createdAt":"2025-05-30T19:32:40.634Z","updatedAt":"2025-05-30T19:47:00.719Z"},{"id":"ce046910-e436-4468-82c7-3dcf557e4f34","name":"Tình yêu cay đắng","slug":"tinh-yeu-cay-dang","createdAt":"2025-05-30T19:32:40.655Z","updatedAt":"2025-05-30T19:47:00.730Z"},{"id":"35a40203-7314-4cc9-aaa3-803a284155fc","name":"Phản công","slug":"phan-cong","createdAt":"2025-05-30T19:32:42.826Z","
+
+=== 'movie' keyword count ===
+"movie": count: 0
+"movie":{ count: 0

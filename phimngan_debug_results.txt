@@ -1,0 +1,23 @@
+Status: 200, Length: 74039
+Has __NEXT_DATA__: False
+Has "RSC": False
+Pattern "movie":{...} : 0 matches
+"slug" patterns: 180
+  slug=sieu-cuong
+  slug=tinh-yeu-cay-dang
+  slug=phan-cong
+  slug=tinh-cam-gia-dinh
+  slug=du-hanh-thoi-gian
+"episodeCount" patterns: 30
+  episodeCount=80
+  episodeCount=51
+  episodeCount=63
+  episodeCount=57
+  episodeCount=63
+"id","title" pairs: 30
+  id=f609ecca-acf8-40c7-a393-660739, title=Ép Gả Một Thời, Duyên Tình Một Kiếp
+  id=097b6bfb-6672-4259-9a2a-258700, title=Vĩnh Biệt, Những Người Anh Của Em
+  id=f34d412b-aa1c-4981-8830-8c8544, title=Phá Lệ Mà Cưng Chiều
+  id=41f2f8e1-49fa-48bc-a30a-355eee, title=Bố Chồng Sắp Cưới Muốn Tôi
+  id=cf89174e-a61c-44d5-9c13-ee9373, title=Sợi Dây Hương Duyên
+RSC DATA script tags: 0

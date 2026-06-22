@@ -1,0 +1,22 @@
+=== page=N patterns ===
+=== Trang patterns ===pos=1421: 'Trang không tìm thấy"}],["$","p",null,{"className":"mb-8 max-w-md text-center text-text-sub","children":"'
+
+=== a href with page ===
+=== API URLs in HTML ===https://phimngan.tv/movies
+https://phimngan.tv/movies
+https://phimngan.tv/logo.png
+https://phimngan.tv/logo.png
+https://phimngan.tv\
+https://phimngan.tv/search?q={search_term_string}\
+https://phimngan.tv\
+https://phimngan.tv/logo.png\
+https://phimngan.tv/movies/ep-ga-mot-thoi-duyen-tinh-mot-kiep
+https://cdn.phimngan.xyz/covers/f609ecca-acf8-40c7-a393-660739433715.jpg
+https://phimngan.tv/movies/vinh-biet-nhung-nguoi-anh-cua-em
+https://cdn.phimngan.xyz/covers/097b6bfb-6672-4259-9a2a-2587008b5ee9.jpg
+https://phimngan.tv/movies/ph-l-m-cng-chiu
+https://cdn.phimngan.xyz/covers/f34d412b-aa1c-4981-8830-8c8544668266.jpg
+https://phimngan.tv/movies/bo-chong-sap-cuoi-muon-toi
+https://cdn.phimngan.xyz/covers/41f2f8e1-49fa-48bc-a30a-355eee53ef52.jpg
+
+=== Buttons/links ===

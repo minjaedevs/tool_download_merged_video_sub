@@ -304,11 +304,6 @@ class PhimNganDownloadMergeWorker(DramaWaveDownloadMergeWorker):
 
     subtitle_error_source = "phimngan"
 
-    def _subtitle_outline(self) -> float:
-        # PhimNgan videos are usually vertical HLS encodes; the NetShort outline
-        # can render too thin after scaling, so make the burn-in border explicit.
-        return 3.8
-
     def _settings_fingerprint(self) -> dict:
         settings = super()._settings_fingerprint()
         settings["outline"] = self._subtitle_outline()

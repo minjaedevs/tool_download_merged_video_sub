@@ -95,6 +95,7 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_sub_color_combo.setCurrentText(s.value("sub_color", "Trắng"))
         self.ns_sub_bold_cb.setChecked(self._setting_bool(s, "sub_bold", True))
         self.ns_sub_italic_cb.setChecked(self._setting_bool(s, "sub_italic", False))
+        self.ns_sub_outline_spin.setValue(float(s.value("sub_outline", 1.0)))
 
     def _save_settings(self):
         s = self.settings()
@@ -114,6 +115,7 @@ class XemShortTab(QtWidgets.QWidget):
         s.setValue("sub_color", self.ns_sub_color_combo.currentText())
         s.setValue("sub_bold", int(self.ns_sub_bold_cb.isChecked()))
         s.setValue("sub_italic", int(self.ns_sub_italic_cb.isChecked()))
+        s.setValue("sub_outline", self.ns_sub_outline_spin.value())
         s.sync()
 
     def _connect_settings_autosave(self):
@@ -128,6 +130,7 @@ class XemShortTab(QtWidgets.QWidget):
             self.ns_encode_threads_spin,
             self.ns_sub_size_spin,
             self.ns_sub_margin_v_spin,
+            self.ns_sub_outline_spin,
         ):
             spin.valueChanged.connect(lambda *_: self._save_settings())
 
@@ -277,7 +280,17 @@ class XemShortTab(QtWidgets.QWidget):
             "Màu chữ phụ đề.\nCó thể gõ mã hex bất kỳ (VD: #FF0000)")
         sub_style_row.addWidget(self.ns_sub_color_combo)
         sub_style_row.addSpacing(8)
-        sub_style_row.addWidget(QtWidgets.QLabel("Nền:"))
+        sub_style_row.addWidget(QtWidgets.QLabel("Outline:"))
+        self.ns_sub_outline_spin = QtWidgets.QDoubleSpinBox()
+        self.ns_sub_outline_spin.setRange(0.0, 5.0)
+        self.ns_sub_outline_spin.setSingleStep(0.5)
+        self.ns_sub_outline_spin.setDecimals(1)
+        self.ns_sub_outline_spin.setValue(1.0)
+        self.ns_sub_outline_spin.setFixedWidth(60)
+        self.ns_sub_outline_spin.setToolTip(
+            "Độ dày viền chữ phụ đề (Outline).\n"
+            "0 = không viền, 1 = mặc định, 2 = viền rõ hơn.")
+        sub_style_row.addWidget(self.ns_sub_outline_spin)
         sub_style_row.addSpacing(8)
         self.ns_sub_bold_cb = QtWidgets.QCheckBox("Bold")
         self.ns_sub_bold_cb.setChecked(True)
@@ -919,6 +932,7 @@ class XemShortTab(QtWidgets.QWidget):
             sub_color=self.ns_sub_color_combo.currentText(),
             sub_bold=self.ns_sub_bold_cb.isChecked(),
             sub_italic=self.ns_sub_italic_cb.isChecked(),
+            sub_outline=self.ns_sub_outline_spin.value(),
         )
         self.nsworker = worker
         self._ns_workers.append(worker)

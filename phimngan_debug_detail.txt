@@ -1,0 +1,72 @@
+
+=== basic_url ===
+URL: https://phimngan.tv/movies/ep-ga-mot-thoi-duyen-tinh-mot-kiep?_rsc=abc123
+Status: 200, Length: 240658
+First 500: 3:I[39275,[],""]
+5:I[61343,[],""]
+4:["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"]
+0:["nbTq9B53Uf1cNYJqqIgIh",[[["",{"children":["(root)",{"children":["movies",{"children":[["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],{"children":["__PAGE__",{}]}]}]}]},"$undefined","$undefined",true],["",{"children":["(root)",{"children":["movies",{"children":[["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],{"children":["__PAGE__",{},[["$L1","$L2"],null],null]},["$","$L3",null,{"parallelRouterKey":"children"
+Last 200: h giới, cô đối"}],["$","meta","27",{"name":"twitter:image","content":"https://cdn.phimngan.xyz/covers/f609ecca-acf8-40c7-a393-660739433715.jpg"}],["$","meta","28",{"name":"next-size-adjust"}]]
+1:null
+
+MOVIE FOUND: f609ecca-acf8-40c7-a393-660739433715
+Episodes (id+title+order): 161
+  order=1: Ép Gả Một Thời, Duyên Tình Một, id=d086f509-d73d-4b37-8
+  order=2: Ép Gả Một Thời, Duyên Tình Một, id=cde77606-2b25-4057-a
+  order=3: Ép Gả Một Thời, Duyên Tình Một, id=cea2286d-db17-4bba-a
+videoUrl count: 161
+  First: https://cdn.phimngan.xyz/videos/f609ecca-acf8-40c7-a393-660739433715/d086f509-d73d-4b37-89ea-7585ee52865b/playlist_main.m3u8
+
+=== with_referer ===
+URL: https://phimngan.tv/movies/ep-ga-mot-thoi-duyen-tinh-mot-kiep?_rsc=abc123
+Status: 200, Length: 240658
+First 500: 3:I[39275,[],""]
+5:I[61343,[],""]
+4:["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"]
+0:["nbTq9B53Uf1cNYJqqIgIh",[[["",{"children":["(root)",{"children":["movies",{"children":[["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],{"children":["__PAGE__",{}]}]}]}]},"$undefined","$undefined",true],["",{"children":["(root)",{"children":["movies",{"children":[["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],{"children":["__PAGE__",{},[["$L1","$L2"],null],null]},["$","$L3",null,{"parallelRouterKey":"children"
+Last 200: h giới, cô đối"}],["$","meta","27",{"name":"twitter:image","content":"https://cdn.phimngan.xyz/covers/f609ecca-acf8-40c7-a393-660739433715.jpg"}],["$","meta","28",{"name":"next-size-adjust"}]]
+1:null
+
+MOVIE FOUND: f609ecca-acf8-40c7-a393-660739433715
+Episodes (id+title+order): 161
+  order=1: Ép Gả Một Thời, Duyên Tình Một, id=d086f509-d73d-4b37-8
+  order=2: Ép Gả Một Thời, Duyên Tình Một, id=cde77606-2b25-4057-a
+  order=3: Ép Gả Một Thời, Duyên Tình Một, id=cea2286d-db17-4bba-a
+videoUrl count: 161
+  First: https://cdn.phimngan.xyz/videos/f609ecca-acf8-40c7-a393-660739433715/d086f509-d73d-4b37-89ea-7585ee52865b/playlist_main.m3u8
+
+=== with_rsc_state ===
+URL: https://phimngan.tv/movies/ep-ga-mot-thoi-duyen-tinh-mot-kiep?_rsc=abc123
+Status: 200, Length: 220127
+First 500: 3:I[39275,[],""]
+5:I[61343,[],""]
+4:["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"]
+0:["nbTq9B53Uf1cNYJqqIgIh",[["children","(root)","children","movies","children",["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],[["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],{"children":["__PAGE__",{}]}],[["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],{"children":["__PAGE__",{},[["$L1","$L2"],null],null]},["$","$L3",null,{"parallelRouterKey":"children","segmentPath":["children","(root)","children","movies","c
+Last 200: h giới, cô đối"}],["$","meta","27",{"name":"twitter:image","content":"https://cdn.phimngan.xyz/covers/f609ecca-acf8-40c7-a393-660739433715.jpg"}],["$","meta","28",{"name":"next-size-adjust"}]]
+1:null
+
+MOVIE FOUND: f609ecca-acf8-40c7-a393-660739433715
+Episodes (id+title+order): 161
+  order=1: Ép Gả Một Thời, Duyên Tình Một, id=d086f509-d73d-4b37-8
+  order=2: Ép Gả Một Thời, Duyên Tình Một, id=cde77606-2b25-4057-a
+  order=3: Ép Gả Một Thời, Duyên Tình Một, id=cea2286d-db17-4bba-a
+videoUrl count: 161
+  First: https://cdn.phimngan.xyz/videos/f609ecca-acf8-40c7-a393-660739433715/d086f509-d73d-4b37-89ea-7585ee52865b/playlist_main.m3u8
+
+=== without_rsc ===
+URL: https://phimngan.tv/movies/ep-ga-mot-thoi-duyen-tinh-mot-kiep
+Status: 200, Length: 240658
+First 500: 3:I[39275,[],""]
+5:I[61343,[],""]
+4:["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"]
+0:["nbTq9B53Uf1cNYJqqIgIh",[[["",{"children":["(root)",{"children":["movies",{"children":[["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],{"children":["__PAGE__",{}]}]}]}]},"$undefined","$undefined",true],["",{"children":["(root)",{"children":["movies",{"children":[["id","ep-ga-mot-thoi-duyen-tinh-mot-kiep","c"],{"children":["__PAGE__",{},[["$L1","$L2"],null],null]},["$","$L3",null,{"parallelRouterKey":"children"
+Last 200: h giới, cô đối"}],["$","meta","27",{"name":"twitter:image","content":"https://cdn.phimngan.xyz/covers/f609ecca-acf8-40c7-a393-660739433715.jpg"}],["$","meta","28",{"name":"next-size-adjust"}]]
+1:null
+
+MOVIE FOUND: f609ecca-acf8-40c7-a393-660739433715
+Episodes (id+title+order): 161
+  order=1: Ép Gả Một Thời, Duyên Tình Một, id=d086f509-d73d-4b37-8
+  order=2: Ép Gả Một Thời, Duyên Tình Một, id=cde77606-2b25-4057-a
+  order=3: Ép Gả Một Thời, Duyên Tình Một, id=cea2286d-db17-4bba-a
+videoUrl count: 161
+  First: https://cdn.phimngan.xyz/videos/f609ecca-acf8-40c7-a393-660739433715/d086f509-d73d-4b37-89ea-7585ee52865b/playlist_main.m3u8
