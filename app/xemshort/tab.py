@@ -286,7 +286,7 @@ class XemShortTab(QtWidgets.QWidget):
         self.ns_sub_outline_spin.setSingleStep(0.5)
         self.ns_sub_outline_spin.setDecimals(1)
         self.ns_sub_outline_spin.setValue(1.0)
-        self.ns_sub_outline_spin.setFixedWidth(60)
+        self.ns_sub_outline_spin.setMinimumWidth(85)
         self.ns_sub_outline_spin.setToolTip(
             "Độ dày viền chữ phụ đề (Outline).\n"
             "0 = không viền, 1 = mặc định, 2 = viền rõ hơn.")
