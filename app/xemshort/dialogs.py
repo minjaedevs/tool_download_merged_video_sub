@@ -870,10 +870,22 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
             "border-radius: 4px; }"
             "QPushButton:hover { background-color: #4b5563; }"
         )
+        self.paste_errors_btn = QtWidgets.QPushButton("Dán tập lỗi")
+        self.paste_errors_btn.setStyleSheet(
+            "QPushButton { background-color: #f97316; color: white; padding: 4px 12px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #ea580c; }"
+        )
+        self.paste_errors_btn.setToolTip(
+            "Đọc danh sách số tập từ clipboard (copy bằng nút 'Sao chép tập lỗi'),\n"
+            "bỏ chọn tất cả, xóa filter rồi tích đúng các tập đó."
+        )
         self.select_all_btn.clicked.connect(lambda: self._toggle_all(True))
         self.deselect_all_btn.clicked.connect(lambda: self._toggle_all(False))
+        self.paste_errors_btn.clicked.connect(self._paste_error_episodes)
         btn_row.addWidget(self.select_all_btn)
         btn_row.addWidget(self.deselect_all_btn)
+        btn_row.addWidget(self.paste_errors_btn)
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
@@ -1068,6 +1080,70 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
                 checkbox = self._row_checkbox(item)
                 if checkbox:
                     checkbox.setChecked(check)
+
+    def _paste_error_episodes(self):
+        """Đọc danh sách số tập từ clipboard, bỏ chọn tất cả rồi tích đúng các tập đó."""
+        text = QtWidgets.QApplication.clipboard().text().strip()
+        if not text:
+            QtWidgets.QToolTip.showText(
+                QtGui.QCursor.pos(),
+                "Clipboard trống — hãy nhấn 'Sao chép tập lỗi' trước.",
+                None, QtCore.QRect(), 2000,
+            )
+            return
+
+        # Parse JSON array [1, 2, 5, ...] từ nút "Sao chép tập lỗi"
+        ep_nums: set[int] = set()
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                ep_nums = {int(x) for x in parsed if isinstance(x, (int, str)) and str(x).strip().isdigit()}
+        except Exception:
+            pass
+
+        # Fallback: comma/space separated "1,2,5 10"
+        if not ep_nums:
+            for part in re.split(r"[,\s]+", text):
+                part = part.strip()
+                if part.isdigit():
+                    ep_nums.add(int(part))
+
+        if not ep_nums:
+            QtWidgets.QToolTip.showText(
+                QtGui.QCursor.pos(),
+                "Clipboard không chứa danh sách số tập hợp lệ.",
+                None, QtCore.QRect(), 2000,
+            )
+            return
+
+        # Bỏ chọn tất cả + xóa filter
+        self._toggle_all(False)
+        self.search.blockSignals(True)
+        self.search.clear()
+        self.search.blockSignals(False)
+        # Hiện lại tất cả item (reset filter)
+        for i in range(self.list_widget.count()):
+            self.list_widget.item(i).setHidden(False)
+
+        # Tích các tập có số trong ep_nums
+        matched = 0
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            ep: XSEpisode = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            if ep.episode in ep_nums:
+                checkbox = self._row_checkbox(item)
+                if checkbox:
+                    checkbox.setChecked(True)
+                    matched += 1
+
+        self._update_count()
+        not_found = len(ep_nums) - matched
+        msg = f"Đã chọn {matched}/{len(ep_nums)} tập từ clipboard"
+        if not_found:
+            msg += f" ({not_found} tập không tìm thấy)"
+        QtWidgets.QToolTip.showText(
+            QtGui.QCursor.pos(), msg, None, QtCore.QRect(), 2000,
+        )
 
     def _filter(self, text: str):
         text = text.strip().lower()

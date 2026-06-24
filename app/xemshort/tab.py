@@ -691,6 +691,7 @@ class XemShortTab(QtWidgets.QWidget):
         _style3 = "QPushButton { background-color: #f59e0b; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; } QPushButton:hover { background-color: #d97706; }"
         _style4 = "QPushButton { background-color: #10b981; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; } QPushButton:hover { background-color: #059669; }"
         _style5 = "QPushButton { background-color: #ef4444; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; } QPushButton:hover { background-color: #dc2626; }"
+        _style6 = "QPushButton { background-color: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; } QPushButton:hover { background-color: #ea580c; }"
 
         movie.open_btn    = _btn("Mở thư mục", _style,  "Mở thư mục chứa video",
                                  lambda *_: self._ns_open_movie_folder(movie))
@@ -700,11 +701,15 @@ class XemShortTab(QtWidgets.QWidget):
                                 lambda *_: self._ns_remerge_movie(movie))
         movie.detail_btn  = _btn("Chi tiết",  _style4, "Xem chi tiết từng tập",
                                 lambda *_: self._ns_show_detail(movie))
+        movie.copy_errors_btn = _btn("Sao chép tập lỗi", _style6,
+                                     "Copy danh sách số tập thiếu sub vào clipboard\n"
+                                     "(dùng để dán vào dialog chọn tập khi fetch lại)",
+                                     lambda *_: self._ns_copy_error_episodes(movie))
         movie.delete_btn  = _btn("Xóa",       _style5, "Xóa phim khỏi danh sách",
                                 lambda *_: self._ns_remove_movie(movie))
 
         for _b in [movie.open_btn, movie.openMerged_btn, movie.remerge_btn,
-                   movie.detail_btn, movie.delete_btn]:
+                   movie.detail_btn, movie.copy_errors_btn, movie.delete_btn]:
             btn_l.addWidget(_b)
 
         self.ns_table.setCellWidget(row, 6, btn_w)
@@ -741,6 +746,7 @@ class XemShortTab(QtWidgets.QWidget):
     def _ns_update_row_btns(self, movie: XSMovie):
         running = bool(self.nsworker and self.nsworker.isRunning())
         has_done = any(e.selected and e.status == "done" for e in movie.episodes)
+        has_no_sub = any(e.selected and e.merge_note == "no_sub" for e in movie.episodes)
         if hasattr(movie, "remerge_btn"):
             movie.remerge_btn.setVisible(not running and has_done)
         if hasattr(movie, "delete_btn"):
@@ -749,6 +755,8 @@ class XemShortTab(QtWidgets.QWidget):
             movie.detail_btn.setVisible(not running)
         if hasattr(movie, "openMerged_btn"):
             movie.openMerged_btn.setVisible(True)
+        if hasattr(movie, "copy_errors_btn"):
+            movie.copy_errors_btn.setVisible(not running and has_no_sub)
 
     def _ns_refresh_movie_row(self, movie: XSMovie):
         """Refresh all visible cells for a movie row (total, selected, status, notes, actions)."""
@@ -795,7 +803,7 @@ class XemShortTab(QtWidgets.QWidget):
         if row < len(self.movies):
             movie = self.movies[row]
             if block:
-                for btn_name in ("remerge_btn", "delete_btn", "detail_btn"):
+                for btn_name in ("remerge_btn", "delete_btn", "detail_btn", "copy_errors_btn"):
                     btn = getattr(movie, btn_name, None)
                     if btn is not None:
                         btn.setVisible(False)
@@ -1058,6 +1066,29 @@ class XemShortTab(QtWidgets.QWidget):
             self._ns_set_status(row, "Ready")
         self._log(f"Re-merge '{movie.name}': reset {reset} tập, bắt đầu lại...")
         self._ns_on_start()
+
+    def _ns_copy_error_episodes(self, movie: XSMovie):
+        """Copy danh sách số tập thiếu sub (merge_note == 'no_sub') vào clipboard."""
+        import json as _json
+        error_eps = sorted(
+            e.episode for e in movie.episodes if e.selected and e.merge_note == "no_sub"
+        )
+        if not error_eps:
+            QtWidgets.QToolTip.showText(
+                QtGui.QCursor.pos(),
+                "Không có tập nào thiếu sub.",
+                None, QtCore.QRect(), 1500,
+            )
+            return
+        text = _json.dumps(error_eps)
+        QtWidgets.QApplication.clipboard().setText(text)
+        ep_str = ", ".join(f"T{n}" for n in error_eps)
+        QtWidgets.QToolTip.showText(
+            QtGui.QCursor.pos(),
+            f"Đã copy {len(error_eps)} tập lỗi vào clipboard",
+            None, QtCore.QRect(), 2000,
+        )
+        self._log(f"[copy] '{movie.name}': {len(error_eps)} tập thiếu sub → clipboard: {ep_str}")
 
     def _ns_on_movie_done(self, movie: XSMovie, iterator, instance_id: int):
         if self._ns_active_worker_id != instance_id:
