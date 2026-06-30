@@ -1,6 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-datas = [('assets', 'assets'), ('root', 'root')]
+datas = [
+    ('assets/mp42hls.exe', 'assets'),
+    ('assets/yt-dlp-gui.ico', 'assets'),
+    ('root', 'root'),
+]
 binaries = []
 hiddenimports = [
     'requests',

@@ -37,6 +37,23 @@ jobs:
           pip install -r requirements.txt
           pip install -U "https://github.com/yt-dlp/Pyinstaller-Builds/releases/download/2025.09.13.221251/pyinstaller-6.16.0-py3-none-win_amd64.whl"
 
+      - name: Validate bundled assets
+        working-directory: ./app
+        shell: pwsh
+        run: |
+          $required = @(
+            "assets/mp42hls.exe",
+            "assets/yt-dlp-gui.ico",
+            "root/config.toml"
+          )
+
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              Write-Error "Missing required release asset: $path"
+              exit 1
+            }
+          }
+
       - name: Determine version
         id: version
         shell: bash
@@ -77,9 +94,52 @@ jobs:
         working-directory: ./app
         shell: pwsh
         run: |
-          # With --onefile, output is a single exe at dist/tool-download-movie.exe
-          # Create zip (for manual download)
-          Compress-Archive -Path dist/tool-download-movie.exe -DestinationPath ./tool-download-movie-win64.zip
+          $version = "${{ steps.version.outputs.version }}"
+          $packageDir = "tool-download-movie-pro-v$version"
+
+          if (Test-Path $packageDir) {
+            Remove-Item $packageDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force "$packageDir/assets" | Out-Null
+
+          Copy-Item dist/tool-download-movie.exe "$packageDir/tool-download-movie.exe"
+          Copy-Item assets/mp42hls.exe "$packageDir/assets/mp42hls.exe"
+          Copy-Item assets/yt-dlp-gui.ico "$packageDir/assets/yt-dlp-gui.ico"
+          if (Test-Path fonts) {
+            Copy-Item fonts "$packageDir/fonts" -Recurse
+          }
+          if (Test-Path ffmpeg.exe) {
+            Copy-Item ffmpeg.exe "$packageDir/ffmpeg.exe"
+          } else {
+            Write-Host "ffmpeg.exe not found in app/. Full zip will omit it; updater exe is unaffected."
+          }
+          if (Test-Path ffprobe.exe) {
+            Copy-Item ffprobe.exe "$packageDir/ffprobe.exe"
+          } else {
+            Write-Host "ffprobe.exe not found in app/. Full zip will omit it; updater exe is unaffected."
+          }
+
+          @"
+          Tool Download Movie v$version
+
+          Run: tool-download-movie.exe
+
+          Included:
+          - tool-download-movie.exe
+          - assets/
+          - ffmpeg.exe if present in this package
+          - ffprobe.exe if present in this package
+          - fonts/
+          - README_DISTRIBUTION.txt
+
+          Note:
+          - mp42hls.exe is also bundled inside the one-file exe by PyInstaller.
+          - For future updates, users only need to replace tool-download-movie.exe.
+          - Local user settings are stored under the Windows app data folder,
+            for example: %LOCALAPPDATA%\Tool Download Movie
+          "@ | Set-Content -Path "$packageDir/README_DISTRIBUTION.txt" -Encoding UTF8
+
+          Compress-Archive -Path "$packageDir/*" -DestinationPath ./tool-download-movie-win64.zip -Force
 
           # Create a directory for release assets
           New-Item -ItemType Directory -Force release-assets | Out-Null
@@ -103,7 +163,7 @@ jobs:
             app/tool-download-movie-win64.zip
             app/release-assets/tool-download-movie.exe
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
 
       - name: Upload production release
         if: ${{ github.event.inputs.nightly != 'true' }}
@@ -117,4 +177,4 @@ jobs:
             app/tool-download-movie-win64.zip
             app/release-assets/tool-download-movie.exe
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}

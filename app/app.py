@@ -22,6 +22,7 @@ from utils import BIN_DIR, ROOT, load_toml, save_toml
 from update_version import Updater
 from xemshort import DramaWaveTab, MovieManagerTab, XemShortTab
 from phimngan import PhimNganTab
+from mp4tom3u8 import Mp4ToM3U8Tab
 from m3u8.m3utab import M3U8ProTab, M3U8Tab
 from kkphim1.kkphimtab import KkPhimTab
 from nguonc.nguonctab import NguoncTab
@@ -84,6 +85,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         phimngan_tab = PhimNganTab()
         tab_widget.addTab(phimngan_tab, "phimngan.tv")
+
+        # Tab: MP4 → M3U8 converter
+        mp4_m3u8_tab = Mp4ToM3U8Tab()
+        tab_widget.addTab(mp4_m3u8_tab, "MP4 → M3U8")
 
         # Tab: Movie Manager (ẩn tạm, bật lại khi cần quản lý/sync movie)
         # movie_tab = MovieManagerTab()
