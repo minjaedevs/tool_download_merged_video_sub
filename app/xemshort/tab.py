@@ -522,6 +522,7 @@ class XemShortTab(QtWidgets.QWidget):
         worker.success.connect(self._ns_on_fetch_success)
         worker.cache_hit.connect(self._ns_on_fetch_cache_hit)
         worker.error.connect(self._ns_on_fetch_error)
+        worker.log_msg.connect(lambda msg, _: self._log(f"[fetch] {msg}"))
         worker.finished.connect(
             lambda: self.ns_fetch_btn.setEnabled(not (self.nsworker and self.nsworker.isRunning())))
         worker.finished.connect(worker.deleteLater)

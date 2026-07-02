@@ -307,8 +307,119 @@ class PhimNganDownloadMergeWorker(DramaWaveDownloadMergeWorker):
     def _settings_fingerprint(self) -> dict:
         settings = super()._settings_fingerprint()
         settings["outline"] = self._subtitle_outline()
-        settings["style_version"] = 3
+        settings["style_version"] = 5
+        settings["fps_fix"] = "setpts_cfr_from_frame_count"
         return settings
+
+    def _ffprobe_path(self) -> Path | None:
+        import shutil
+
+        ffmpeg_path = self._get_ffmpeg_path()
+        if ffmpeg_path:
+            sibling = ffmpeg_path.with_name("ffprobe.exe" if platform.system() == "Windows" else "ffprobe")
+            if sibling.exists():
+                return sibling
+
+        found = shutil.which("ffprobe.exe" if platform.system() == "Windows" else "ffprobe")
+        return Path(found) if found else None
+
+    @staticmethod
+    def _ratio_to_float(value: str) -> float | None:
+        try:
+            if "/" in value:
+                num, den = value.split("/", 1)
+                den_f = float(den)
+                if den_f == 0:
+                    return None
+                return float(num) / den_f
+            return float(value)
+        except Exception:
+            return None
+
+    def _probe_merge_fps(self, ep: XSEpisode) -> float | None:
+        cached = getattr(ep, "_phimngan_merge_fps", None)
+        if cached:
+            return cached
+        if not ep.video_path or not ep.video_path.exists():
+            return None
+
+        ffprobe_path = self._ffprobe_path()
+        if not ffprobe_path:
+            return None
+
+        cflags = {"creationflags": sp.CREATE_NO_WINDOW} if platform.system() == "Windows" else {}
+        try:
+            result = sp.run(
+                [
+                    str(ffprobe_path),
+                    "-v", "error",
+                    "-select_streams", "v:0",
+                    "-count_frames",
+                    "-show_entries", "stream=nb_read_frames,avg_frame_rate,duration:format=duration",
+                    "-of", "json",
+                    str(ep.video_path),
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                **cflags,
+            )
+            if result.returncode != 0:
+                return None
+
+            data = json.loads(result.stdout or "{}")
+            stream = (data.get("streams") or [{}])[0]
+            fmt = data.get("format") or {}
+
+            duration = None
+            for raw in (stream.get("duration"), fmt.get("duration")):
+                try:
+                    duration = float(raw)
+                    if duration > 0:
+                        break
+                except Exception:
+                    duration = None
+
+            frame_count = None
+            try:
+                frame_count = int(stream.get("nb_read_frames") or 0)
+            except Exception:
+                frame_count = None
+
+            fps = None
+            if frame_count and duration and duration > 0:
+                fps = frame_count / duration
+
+            if fps is None or not 12 <= fps <= 120:
+                fps = self._ratio_to_float(str(stream.get("avg_frame_rate") or ""))
+
+            if fps is None or not 12 <= fps <= 120:
+                return None
+
+            fps = round(fps, 6)
+            setattr(ep, "_phimngan_merge_fps", fps)
+            self.log(
+                f"tap {ep.episode}: fps thuc te={fps:g}"
+                + (f" ({frame_count} frames/{duration:.3f}s)" if frame_count and duration else "")
+            )
+            return fps
+        except Exception as exc:
+            self.log(f"tap {ep.episode}: khong probe duoc fps ({exc})")
+            return None
+
+    def _merge_video_filter(self, vf_filter: str, ep: XSEpisode) -> str:
+        fps = self._probe_merge_fps(ep)
+        if not fps:
+            self.log(f"tap {ep.episode}: khong co fps probe, chi reset timestamp ve 0")
+            return f"setpts=PTS-STARTPTS,{vf_filter}"
+        self.log(f"tap {ep.episode}: sua timeline video theo fps thuc te truoc khi burn sub")
+        return f"setpts=N/({fps:.6f}*TB),{vf_filter}"
+
+    def _merge_output_args(self, ep: XSEpisode) -> list[str]:
+        fps = self._probe_merge_fps(ep)
+        return ["-r", f"{fps:.6f}"] if fps else []
 
     def _download_hls_video(self, url: str, output: Path, desc: str) -> bool:
         """Let ffmpeg read the remote playlist so absolute-relative CDN paths resolve."""
@@ -386,11 +497,13 @@ class PhimNganDownloadMergeWorker(DramaWaveDownloadMergeWorker):
             "-allowed_extensions", "ALL",
             "-allowed_segment_extensions", "ALL",
             "-extension_picky", "0",
+            "-fflags", "+genpts",
             "-i", url,
             "-map", "0:v:0?",
             "-map", "0:a:0?",
             "-c", "copy",
             "-bsf:a", "aac_adtstoasc",
+            "-avoid_negative_ts", "make_zero",
             str(tmp),
         ]
 
@@ -401,11 +514,13 @@ class PhimNganDownloadMergeWorker(DramaWaveDownloadMergeWorker):
             "-loglevel", "warning",
             "-headers", headers,
             "-protocol_whitelist", "file,http,https,tcp,tls,crypto,data",
+            "-fflags", "+genpts",
             "-i", url,
             "-map", "0:v:0?",
             "-map", "0:a:0?",
             "-c", "copy",
             "-bsf:a", "aac_adtstoasc",
+            "-avoid_negative_ts", "make_zero",
             str(tmp),
         ]
 

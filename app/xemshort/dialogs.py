@@ -449,36 +449,31 @@ class XSDetailDialog(QtWidgets.QDialog):
         msg.exec()
 
     def _build_report(self, ep: XSEpisode) -> str:
-        """Build a report string comparing video durations and VTT subtitle analysis."""
-        orig_dur = merged_dur = None
-        if ep.video_path and ep.video_path.exists():
-            orig_dur = _ns_get_video_duration(ep.video_path)
-        if ep.merged_path and ep.merged_path.exists():
-            merged_dur = _ns_get_video_duration(ep.merged_path)
+        """Build report from cached episode metadata — no blocking ffprobe calls.
 
-        dur_label = "—"
-        dur_detail = ""
-        if orig_dur and merged_dur:
-            try:
-                orig_secs = sum(
-                    int(x) * 60 ** i for i, x in enumerate(reversed(orig_dur.split(":"))))
-                merged_secs = sum(
-                    int(x) * 60 ** i for i, x in enumerate(reversed(merged_dur.split(":"))))
-                diff = abs(merged_secs - orig_secs)
-                if diff <= 2:
-                    dur_label = "OK"
-                else:
-                    dur_label = "⚠ Chênh lệch"
-                dur_detail = f" | Gốc: {orig_dur} | Merge: {merged_dur}"
-            except Exception:
-                dur_label = "?"
-                dur_detail = f" | Gốc: {orig_dur} | Merge: {merged_dur}"
-        elif merged_dur:
-            dur_label = "?"
-            dur_detail = f" | Merge: {merged_dur}"
-        elif orig_dur:
-            dur_label = "⚠ Chưa merge"
-            dur_detail = f" | Gốc: {orig_dur}"
+        Duration info is read from ep.merge_note which is set during the merge
+        worker run, avoiding per-episode subprocess invocations on the UI thread.
+        Use the 'Kiểm tra' button for an on-demand ffprobe comparison.
+        """
+        note = ep.merge_note or ""
+        if note in ("ok",) or note.startswith("skip:"):
+            dur_label, dur_detail = "OK", ""
+        elif note.startswith("dur:"):
+            dur_label, dur_detail = "⚠ Chênh lệch", f" | {note[4:]}"
+        elif note == "no_sub":
+            dur_label, dur_detail = "⚠ Thiếu sub", ""
+        elif note == "error":
+            msg = ep.error_msg[:60] if ep.error_msg else ""
+            dur_label, dur_detail = "⚠ Lỗi", (f" | {msg}" if msg else "")
+        elif ep.status == "done":
+            dur_label, dur_detail = "OK", ""
+        elif ep.status == "error":
+            msg = ep.error_msg[:60] if ep.error_msg else ""
+            dur_label, dur_detail = "⚠ Lỗi", (f" | {msg}" if msg else "")
+        elif ep.status in ("pending", "downloading", "downloaded", "merging"):
+            dur_label, dur_detail = ep.status, ""
+        else:
+            dur_label, dur_detail = "—", ""
 
         vtt_label = ""
         if ep.sub_path and ep.sub_path.exists():
@@ -923,7 +918,12 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
         layout.setSpacing(8)
 
         checkbox = QtWidgets.QCheckBox()
-        checkbox.setChecked(True)
+        # Locked episodes: uncheck by default and disable to prevent accidental selection
+        is_locked = getattr(ep, "is_locked", False) or not ep.play
+        checkbox.setChecked(not is_locked)
+        checkbox.setEnabled(not is_locked)
+        if is_locked:
+            checkbox.setToolTip("Tập này bị khóa (isLock=True) — không có URL video")
         checkbox.toggled.connect(lambda *_: self._update_count())
         row._episode_checkbox = checkbox
         row.setProperty("episode_checkbox", checkbox)
@@ -932,13 +932,24 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
         label_text = f"Tap {ep.episode}"
         if ep.name and ep.name != movie_name:
             label_text += f" - {ep.name}"
+        if is_locked:
+            label_text += "  🔒"
         label = QtWidgets.QLabel(label_text)
         label.setMinimumWidth(220)
-        label.setStyleSheet("font-weight: 600;")
+        label.setStyleSheet(
+            "font-weight: 600; color: #6b7280;" if is_locked else "font-weight: 600;"
+        )
         layout.addWidget(label, stretch=1)
 
-        video_label = QtWidgets.QLabel("Video: yes" if ep.play else "Video: no")
-        video_label.setStyleSheet("color:#16a34a;" if ep.play else "color:#9ca3af;")
+        if is_locked:
+            video_label = QtWidgets.QLabel("🔒 LOCKED")
+            video_label.setStyleSheet("color:#ef4444; font-weight:bold;")
+        elif ep.play:
+            video_label = QtWidgets.QLabel("Video: yes")
+            video_label.setStyleSheet("color:#16a34a;")
+        else:
+            video_label = QtWidgets.QLabel("Video: no")
+            video_label.setStyleSheet("color:#9ca3af;")
         layout.addWidget(video_label)
 
         sub_label = QtWidgets.QLabel("Sub: yes" if ep.subtitle_url else "Sub: no")

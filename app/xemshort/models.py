@@ -24,6 +24,8 @@ class XSEpisode:
     subtitle_url: Optional[str] = None
     selected: bool = True
 
+    is_locked: bool = False   # isLock=True → no play URL, cannot download
+
     video_path: Optional[Path] = None
     sub_path: Optional[Path] = None
     merged_path: Optional[Path] = None

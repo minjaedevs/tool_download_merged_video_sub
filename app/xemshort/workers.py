@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+import urllib3
 from PySide6 import QtCore
+
+# awscdn.netshort.com has an untrusted chain on Windows — suppress the warning globally
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from .models import XSEpisode, XSMovie
 from .helpers import (
@@ -36,13 +40,16 @@ from .subtitle_errors import upsert_subtitle_error
 # API headers used for all XemShort HTTP requests
 NETSHORT_API_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
     ),
-    "Accept": "*/*",
-    "Accept-Language": "en-AU,en;q=0.9,vi;q=0.8",
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
     "Origin": "https://xemshort.top",
     "Referer": "https://xemshort.top/",
+    "sec-ch-ua": '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
     "Sec-Fetch-Dest": "empty",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "same-site",
@@ -158,6 +165,7 @@ class XSFetchWorker(QtCore.QThread):
     success   = QtCore.Signal(list, str, str, int)   # episodes, movie_name, movie_id, instance_id
     cache_hit = QtCore.Signal(list, str, str, int)   # episodes, movie_name, movie_id, instance_id
     error     = QtCore.Signal(str, int)              # msg, instance_id
+    log_msg   = QtCore.Signal(str, int)              # debug/warning, instance_id
 
     def __init__(self, api_url: str, movie_id: str, headers: dict[str, str] | None = None):
         """Store API URL and movie ID for the fetch request."""
@@ -180,20 +188,17 @@ class XSFetchWorker(QtCore.QThread):
         try:
             import subprocess as sp, json as _json, platform as _platform
             _cflags = {"creationflags": sp.CREATE_NO_WINDOW} if _platform.system() == "Windows" else {}
+            _hdr_args: list[str] = []
+            for _hk, _hv in self.headers.items():
+                _hdr_args += ["-H", f"{_hk}: {_hv}"]
             result = sp.run(
-                ["curl", "-s", "--max-time", "15",
-                 "-H", f"User-Agent: {self.headers['User-Agent']}",
-                 "-H", f"Accept: {self.headers.get('Accept', '*/*')}",
-                 "-H", f"Origin: {self.headers['Origin']}",
-                 "-H", f"Referer: {self.headers['Referer']}",
-                 "-H", f"short-source: {self.headers['short-source']}",
-                 url],
+                ["curl", "-s", "--max-time", "10", *_hdr_args, url],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=20, **_cflags
+                timeout=15, **_cflags
             )
             if result.returncode != 0 or not result.stdout.strip():
-                # Fall back to requests
-                r = requests.get(url, headers=self.headers, timeout=15)
+                # Fall back to requests with (connect=10s, read=30s) timeout
+                r = requests.get(url, headers=self.headers, timeout=(10, 30), verify=False)
                 r.raise_for_status()
                 data = r.json()
             else:
@@ -228,6 +233,28 @@ class XSFetchWorker(QtCore.QThread):
                         self.instance_id,
                     )
                 return
+
+            # Debug: log raw episode keys when play URL is missing
+            empty_play = [e for e in episodes if not e.play]
+            if empty_play:
+                raw_items = (
+                    data if isinstance(data, list) else (
+                        data.get("shortPlayEpisodeInfos")
+                        or data.get("episodeList")
+                        or data.get("episodes")
+                        or data.get("data")
+                        or data.get("list")
+                        or data.get("result")
+                        or []
+                    )
+                )
+                first_item = raw_items[0] if raw_items and isinstance(raw_items[0], dict) else {}
+                self.log_msg.emit(
+                    f"⚠ {len(empty_play)}/{len(episodes)} tập thiếu URL video.\n"
+                    f"Keys trong item[0]: {list(first_item.keys())}\n"
+                    f"Preview item[0]: {str(first_item)[:400]}",
+                    self.instance_id,
+                )
 
             _ns_cache_set(key, episodes, movie_name)
             self.success.emit(episodes, movie_name, self.movie_id, self.instance_id)
@@ -348,6 +375,12 @@ class XSDownloadMergeWorker(QtCore.QThread):
     def _subtitle_shadow(self) -> float:
         return 0.0
 
+    def _merge_video_filter(self, vf_filter: str, ep: XSEpisode) -> str:
+        return vf_filter
+
+    def _merge_output_args(self, ep: XSEpisode) -> list[str]:
+        return []
+
     def _episode_base_name(self, ep: XSEpisode) -> str:
         padding = len(str(self.movie.total))
         return f"ep{str(ep.episode).zfill(padding)}"
@@ -411,7 +444,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 return False
             try:
                 with requests.get(url, headers=NETSHORT_DOWNLOAD_HEADERS,
-                                  stream=True, timeout=15) as r:
+                                  stream=True, timeout=15, verify=False) as r:
                     r.raise_for_status()
                     output.parent.mkdir(parents=True, exist_ok=True)
                     with open(tmp, "wb") as f:
@@ -439,6 +472,19 @@ class XSDownloadMergeWorker(QtCore.QThread):
     def _download_episode(self, ep: XSEpisode) -> bool:
         """Download video and subtitle for one episode; skip sub if local file exists."""
         if self._stop.is_set() or not ep.selected:
+            return False
+
+        # Guard: ep.play trống → không có URL để tải (thường do isLock=True)
+        if not ep.play:
+            ep.status = "error"
+            ep.merge_note = "error"
+            if getattr(ep, "is_locked", False):
+                ep.error_msg = "episode is locked (isLock=True)"
+                self.log(f"tập {ep.episode}: bị khóa (isLock=True) — bỏ qua")
+            else:
+                ep.error_msg = "missing video URL"
+                self.log(f"tập {ep.episode}: không có URL video (thiếu field play/playVoucher/...)")
+            self.episode_status.emit(ep.episode, "error", self.instance_id)
             return False
 
         folder = self.movie.save_dir / self.movie.folder_name
@@ -480,8 +526,27 @@ class XSDownloadMergeWorker(QtCore.QThread):
                         self.log(f"không xóa được sub cũ tập {ep.episode} ({old_sub.name}): {e}")
             try:
                 r = requests.get(ep.subtitle_url,
-                                 headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30)
+                                 headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30, verify=False)
+                ct = r.headers.get("Content-Type", "?")
+                self.log(
+                    f"sub tập {ep.episode}: HTTP {r.status_code} "
+                    f"{len(r.content)}B Content-Type={ct}"
+                )
                 r.raise_for_status()
+
+                # Detect HTML error page (CDN/403 returns HTML instead of subtitle)
+                raw_peek = r.content.lstrip(b'\xef\xbb\xbf')[:15]
+                if raw_peek.lstrip().startswith(b'<'):
+                    preview = r.content[:300].decode("utf-8", errors="replace")
+                    self.log(f"sub tập {ep.episode}: server trả về HTML thay vì subtitle\n{preview}")
+                    ep.error_msg = "subtitle response is HTML (CDN error/403)"
+                    self._record_subtitle_error(
+                        ep,
+                        "subtitle response is HTML",
+                        subtitle_url=ep.subtitle_url,
+                    )
+                    return True
+
                 if not r.content or not r.content.strip():
                     ep.error_msg = "empty subtitle download"
                     self._record_subtitle_error(
@@ -490,7 +555,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
                         subtitle_url=ep.subtitle_url,
                         bytes=0,
                     )
-                    self.log(f"sub tap {ep.episode} empty")
+                    self.log(f"sub tập {ep.episode} empty")
                     return True
                 ext = _ns_detect_sub_ext(r.content)
                 sub_path = folder / f"{base}.{ext}"
@@ -633,6 +698,8 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 f"Alignment=2,MarginV={self.sub_margin_v}'"
             )
 
+        vf_filter = self._merge_video_filter(vf_filter, ep)
+
         # Get exact source duration to pin output length
         orig_secs = _ns_get_video_duration_secs(ep.video_path)
 
@@ -654,6 +721,7 @@ class XSDownloadMergeWorker(QtCore.QThread):
             "-c:a", "copy",
             "-avoid_negative_ts", "make_zero",
         ]
+        cmd += self._merge_output_args(ep)
         # For libx264: also cap encoder-internal thread count explicitly
         if encoder_name == "libx264":
             cmd += ["-x264-params", f"threads={_cpu_threads}"]
@@ -1042,7 +1110,7 @@ class DramaWaveDownloadMergeWorker(XSDownloadMergeWorker):
         playlist_tmp.unlink(missing_ok=True)
 
         try:
-            response = requests.get(url, headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30)
+            response = requests.get(url, headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30, verify=False)
             response.raise_for_status()
             if b"#EXTM3U" not in response.content[:1024]:
                 preview = response.content[:300].decode("utf-8", errors="replace")
@@ -1145,7 +1213,7 @@ class DramaWaveDownloadMergeWorker(XSDownloadMergeWorker):
                     except Exception as exc:
                         self.log(f"khong xoa duoc sub cu tap {ep.episode} ({old_sub.name}): {exc}")
             try:
-                response = requests.get(ep.subtitle_url, headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30)
+                response = requests.get(ep.subtitle_url, headers=NETSHORT_DOWNLOAD_HEADERS, timeout=30, verify=False)
                 response.raise_for_status()
                 if not response.content or not response.content.strip():
                     ep.error_msg = "empty subtitle download"

@@ -144,12 +144,23 @@ def _ns_parse_episodes(data: dict | list, movie_name: str = "") -> list[XSEpisod
         ep_name = item.get("episodeName")
         name = ep_name if ep_name else movie_name or item.get("name") or "Untitled"
 
-        play = item.get("playVoucher") or item.get("play") or ""
+        play = (
+            item.get("playVoucher")
+            or item.get("play")
+            or item.get("playUrl")
+            or item.get("videoUrl")
+            or item.get("mediaUrl")
+            or item.get("sourceUrl")
+            or item.get("url")
+            or ""
+        )
 
         subtitle_list = item.get("subtitleList") or item.get("subtitle") or []
         sub_url = None
         if subtitle_list and isinstance(subtitle_list, list) and len(subtitle_list) > 0:
             sub_url = subtitle_list[0].get("url")
+
+        is_locked = bool(item.get("isLock", False))
 
         episodes.append(XSEpisode(
             id=str(item.get("episodeId") or item.get("id", "")),
@@ -157,6 +168,7 @@ def _ns_parse_episodes(data: dict | list, movie_name: str = "") -> list[XSEpisod
             episode=int(episode),
             play=play,
             subtitle_url=sub_url,
+            is_locked=is_locked,
         ))
     episodes.sort(key=lambda e: e.episode)
     return episodes
@@ -166,8 +178,10 @@ def _ns_parse_episodes(data: dict | list, movie_name: str = "") -> list[XSEpisod
 
 def _ns_detect_sub_ext(content: bytes) -> str:
     """Detect subtitle format from raw bytes; returns 'vtt', 'srt', or 'txt'."""
-    text = content[:500].decode("utf-8", errors="ignore")
-    if "WEBVTT" in text:
+    # Strip UTF-8 BOM (EF BB BF) before decoding so startswith checks are accurate
+    raw = content.lstrip(b'\xef\xbb\xbf')
+    text = raw[:500].decode("utf-8", errors="ignore").strip()
+    if text.upper().startswith("WEBVTT"):
         return "vtt"
     if "-->" in text:
         return "srt"
@@ -204,11 +218,13 @@ def _ns_convert_sub_to_ass(sub_path: Path, font_name: str, font_size: int,
     )
 
     try:
-        content = sub_path.read_text(encoding='utf-8', errors='replace')
+        # utf-8-sig auto-strips UTF-8 BOM (\ufeff) — plain utf-8 leaves BOM in string
+        # causing content.strip().startswith('WEBVTT') to silently fail
+        content = sub_path.read_text(encoding='utf-8-sig', errors='replace')
     except Exception:
         return sub_path
 
-    is_vtt = content.strip().upper().startswith('WEBVTT')
+    is_vtt = content.lstrip('\ufeff').strip().upper().startswith('WEBVTT')
     events = []
 
     def _to_ass_time(h, m, s, ms):
