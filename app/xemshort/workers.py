@@ -1241,4 +1241,107 @@ class DramaWaveDownloadMergeWorker(XSDownloadMergeWorker):
                 )
                 self.log(f"sub tap {ep.episode} loi: {exc}")
 
-        return True
+
+# ── XSFetchFromSupabaseWorker ─────────────────────────────────────────────────
+
+class XSFetchFromSupabaseWorker(QtCore.QThread):
+    """Fetch episodes from Supabase nestShort_crawl instead of direct API call.
+
+    Emits the same signals as XSFetchWorker so the tab can reuse existing handlers.
+    Credentials (SUPABASE_URL, SUPABASE_KEY) are loaded from the project .env file.
+    """
+
+    success = QtCore.Signal(list, str, str, int)   # episodes, movie_name, movie_id, instance_id
+    error   = QtCore.Signal(str, int)              # msg, instance_id
+    log_msg = QtCore.Signal(str, int)              # msg, instance_id
+
+    _ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+    _TABLE    = "nestShort_crawl"
+
+    def __init__(self, movie_id: str):
+        super().__init__()
+        self.movie_id    = movie_id
+        self.instance_id: int = uuid.uuid4().int & 0x7FFFFFFF
+
+    def run(self) -> None:
+        import os as _os
+        from .sync_movies_supabase import load_env_file
+
+        load_env_file(self._ENV_PATH)
+        supabase_url: str = _os.environ.get("SUPABASE_URL", "")
+        supabase_key: str = _os.environ.get("SUPABASE_KEY", "")
+
+        if not supabase_url or not supabase_key:
+            self.error.emit(
+                "SUPABASE_URL / SUPABASE_KEY chưa cấu hình trong .env",
+                self.instance_id,
+            )
+            return
+
+        try:
+            endpoint = supabase_url.rstrip("/") + f"/rest/v1/{self._TABLE}"
+            headers = {
+                "apikey": supabase_key,
+                "Authorization": f"Bearer {supabase_key}",
+                "Content-Type": "application/json",
+            }
+            resp = requests.get(
+                endpoint,
+                headers=headers,
+                params={
+                    "shortPlayId": f"eq.{self.movie_id}",
+                    "select": "shortPlayId,showName,total,captured,status,raw",
+                    "limit": "1",
+                },
+                timeout=30,
+                verify=False,
+            )
+            resp.raise_for_status()
+            rows: list = resp.json() if isinstance(resp.json(), list) else []
+
+            if not rows:
+                self.error.emit(
+                    f"shortPlayId={self.movie_id} chưa có trong DB.\n"
+                    "Vui lòng gửi yêu cầu crawl qua tab 'Yêu cầu Crawl' trước.",
+                    self.instance_id,
+                )
+                return
+
+            row = rows[0]
+            crawl_status: str = row.get("status", "unknown")
+            if crawl_status != "completed":
+                captured = row.get("captured", 0)
+                total    = row.get("total", 0)
+                self.error.emit(
+                    f"Dữ liệu chưa sẵn sàng: status={crawl_status} "
+                    f"({captured}/{total} tập).\nVui lòng đợi crawl hoàn thành.",
+                    self.instance_id,
+                )
+                return
+
+            raw: dict = row.get("raw") or {}
+            if not raw:
+                self.error.emit(
+                    "raw JSON rỗng trong nestShort_crawl.", self.instance_id
+                )
+                return
+
+            show_name: str = row.get("showName") or raw.get("showName", "")
+            episodes = _ns_parse_episodes(raw, show_name)
+
+            if not episodes:
+                self.error.emit(
+                    f"Không parse được tập nào từ raw JSON "
+                    f"(total={row.get('total')}, captured={row.get('captured')}).",
+                    self.instance_id,
+                )
+                return
+
+            self.log_msg.emit(
+                f"DB: {len(episodes)} tập (status={crawl_status}, show={show_name})",
+                self.instance_id,
+            )
+            self.success.emit(episodes, show_name, self.movie_id, self.instance_id)
+
+        except Exception as exc:
+            self.error.emit(str(exc), self.instance_id)

@@ -919,11 +919,12 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
 
         checkbox = QtWidgets.QCheckBox()
         # Locked episodes: uncheck by default and disable to prevent accidental selection
-        is_locked = getattr(ep, "is_locked", False) or not ep.play
+        # Lock khi thiếu video URL hoặc sub URL (cần cả 2 để merge).
+        is_locked = not ep.play or not ep.subtitle_url
         checkbox.setChecked(not is_locked)
         checkbox.setEnabled(not is_locked)
         if is_locked:
-            checkbox.setToolTip("Tập này bị khóa (isLock=True) — không có URL video")
+            checkbox.setToolTip("Tập này bị khóa — thiếu URL video hoặc URL phụ đề")
         checkbox.toggled.connect(lambda *_: self._update_count())
         row._episode_checkbox = checkbox
         row.setProperty("episode_checkbox", checkbox)

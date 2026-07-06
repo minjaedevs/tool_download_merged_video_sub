@@ -6,6 +6,7 @@ from .workers import (
     NSDownloadMergeWorker,
     NSFetchWorker,
     XSDownloadMergeWorker,
+    XSFetchFromSupabaseWorker,
     XSFetchWorker,
 )
 from .dialogs import (
@@ -24,18 +25,20 @@ from .dialogs import (
 from .tab import XemShortTab
 from .dramawave_tab import DramaWaveTab
 from .movie_manager_tab import MovieManagerTab
+from .request_queue_tab import RequestQueueTab
 
 __all__ = [
     # models
     "NSEpisode", "NSMovie", "XSEpisode", "XSMovie",
     # workers
     "NSFetchWorker", "NSDownloadMergeWorker",
-    "XSFetchWorker", "XSDownloadMergeWorker", "DramaWaveFetchWorker", "DramaWaveDownloadMergeWorker",
+    "XSFetchWorker", "XSFetchFromSupabaseWorker", "XSDownloadMergeWorker",
+    "DramaWaveFetchWorker", "DramaWaveDownloadMergeWorker",
     # dialogs (XS = current, NS = backward-compat)
     "XSDetailDialog", "XSEpisodePickerDialog", "XSPasteJsonDialog",
     "XSVideoPopup", "XSVttEditorDialog",
     "NSDetailDialog", "NSEpisodePickerDialog", "NSPasteJsonDialog",
     "NSVideoPopup", "NSVttEditorDialog",
-    # tab
-    "XemShortTab", "DramaWaveTab", "MovieManagerTab",
+    # tabs
+    "XemShortTab", "DramaWaveTab", "MovieManagerTab", "RequestQueueTab",
 ]

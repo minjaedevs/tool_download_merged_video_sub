@@ -160,7 +160,9 @@ def _ns_parse_episodes(data: dict | list, movie_name: str = "") -> list[XSEpisod
         if subtitle_list and isinstance(subtitle_list, list) and len(subtitle_list) > 0:
             sub_url = subtitle_list[0].get("url")
 
-        is_locked = bool(item.get("isLock", False))
+        # Lock khi thiếu video URL hoặc sub URL (cần cả 2 để merge).
+        # isLock từ API raw bị bỏ qua — dùng URL thực tế để quyết định.
+        is_locked = not play or not sub_url
 
         episodes.append(XSEpisode(
             id=str(item.get("episodeId") or item.get("id", "")),

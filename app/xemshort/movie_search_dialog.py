@@ -157,6 +157,7 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
         self.supabase_key = os.environ.get("SUPABASE_KEY", "").strip() or DEFAULT_SUPABASE_KEY
 
         self._build_ui()
+        self._update_pager()
         QtCore.QTimer.singleShot(100, self._search_first_page)
 
     def selected_play_id(self) -> str:
@@ -199,7 +200,8 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
         root.addWidget(self.scroll, stretch=1)
 
         pager = QtWidgets.QHBoxLayout()
-        self.prev_btn = QtWidgets.QPushButton("Trang truoc")
+        pager.setSpacing(8)
+        self.prev_btn = QtWidgets.QPushButton("Trước")
         self.prev_btn.setStyleSheet(
             "QPushButton { background:#334155;color:white;font-weight:700;padding:7px 14px;border-radius:6px; }"
             "QPushButton:hover { background:#475569; }"
@@ -207,18 +209,40 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
         )
         self.prev_btn.clicked.connect(self._prev_page)
         pager.addWidget(self.prev_btn)
-        self.page_label = QtWidgets.QLabel("Trang 1/1")
-        self.page_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.page_label.setStyleSheet("color:#d1d5db;font-weight:bold;")
-        pager.addWidget(self.page_label, stretch=1)
-        self.next_btn = QtWidgets.QPushButton("Trang sau")
+
+        self.page_buttons_layout = QtWidgets.QHBoxLayout()
+        self.page_buttons_layout.setSpacing(8)
+        pager.addLayout(self.page_buttons_layout)
+
+        self.next_btn = QtWidgets.QPushButton("Sau")
         self.next_btn.setStyleSheet(
-            "QPushButton { background:#2563eb;color:white;font-weight:700;padding:7px 14px;border-radius:6px; }"
-            "QPushButton:hover { background:#1d4ed8; }"
+            "QPushButton { background:#475569;color:white;font-weight:700;padding:7px 14px;border-radius:6px; }"
+            "QPushButton:hover { background:#64748b; }"
             "QPushButton:disabled { background:#1f2937;color:#64748b; }"
         )
         self.next_btn.clicked.connect(self._next_page)
         pager.addWidget(self.next_btn)
+        pager.addStretch()
+
+        self.goto_page_edit = QtWidgets.QLineEdit("1")
+        self.goto_page_edit.setValidator(QtGui.QIntValidator(1, 999999, self))
+        self.goto_page_edit.setFixedWidth(64)
+        self.goto_page_edit.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.goto_page_edit.setStyleSheet(
+            "QLineEdit { background:transparent;color:#f9fafb;border:0;"
+            "border-bottom:1px solid #9ca3af;padding:7px 4px;font-weight:700; }"
+        )
+        self.goto_page_edit.returnPressed.connect(self._go_to_page)
+        pager.addWidget(self.goto_page_edit)
+
+        self.goto_page_btn = QtWidgets.QPushButton("Đi tới")
+        self.goto_page_btn.setStyleSheet(
+            "QPushButton { background:#475569;color:white;font-weight:700;padding:7px 14px;border-radius:6px; }"
+            "QPushButton:hover { background:#64748b; }"
+            "QPushButton:disabled { background:#1f2937;color:#64748b; }"
+        )
+        self.goto_page_btn.clicked.connect(self._go_to_page)
+        pager.addWidget(self.goto_page_btn)
         root.addLayout(pager)
 
         actions = QtWidgets.QHBoxLayout()
@@ -273,6 +297,24 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
             self._page += 1
             self._search()
 
+    def _go_to_page(self) -> None:
+        max_page = max(1, math.ceil(self._total / PAGE_SIZE))
+        text = self.goto_page_edit.text().strip()
+        if not text:
+            self.goto_page_edit.setText(str(self._page))
+            return
+        page = max(1, min(int(text), max_page))
+        self.goto_page_edit.setText(str(page))
+        if page != self._page:
+            self._page = page
+            self._search()
+
+    def _set_page(self, page: int) -> None:
+        if page == self._page or self._worker_running():
+            return
+        self._page = page
+        self._search()
+
     def _search(self) -> None:
         if self._worker_running():
             self._pending_search = True
@@ -287,6 +329,9 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
         self.status_label.setText("Dang tim...")
         self.prev_btn.setEnabled(False)
         self.next_btn.setEnabled(False)
+        self.goto_page_btn.setEnabled(False)
+        for button in getattr(self, "_page_buttons", []):
+            button.setEnabled(False)
 
         worker = NetShortSearchWorker(
             self.supabase_url,
@@ -446,9 +491,57 @@ class NetShortMovieSearchDialog(QtWidgets.QDialog):
 
     def _update_pager(self) -> None:
         max_page = max(1, math.ceil(self._total / PAGE_SIZE))
-        self.page_label.setText(f"Trang {self._page}/{max_page}")
-        self.prev_btn.setEnabled(self._page > 1 and not self._worker_running())
-        self.next_btn.setEnabled(self._page < max_page and not self._worker_running())
+        self._page = max(1, min(self._page, max_page))
+        running = self._worker_running()
+        self.goto_page_edit.setText(str(self._page))
+        self.goto_page_btn.setEnabled(not running)
+        self.prev_btn.setEnabled(self._page > 1 and not running)
+        self.next_btn.setEnabled(self._page < max_page and not running)
+
+        while self.page_buttons_layout.count():
+            item = self.page_buttons_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        self._page_buttons: list[QtWidgets.QPushButton] = []
+
+        if max_page <= 7:
+            entries: list[int | None] = list(range(1, max_page + 1))
+        elif self._page <= 4:
+            entries = [1, 2, 3, 4, 5, None, max_page]
+        elif self._page >= max_page - 3:
+            entries = [1, None, *range(max_page - 4, max_page + 1)]
+        else:
+            entries = [1, None, self._page - 1, self._page, self._page + 1, None, max_page]
+
+        for page in entries:
+            if page is None:
+                dots = QtWidgets.QLabel("…")
+                dots.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+                dots.setFixedWidth(24)
+                dots.setStyleSheet("color:#f9fafb;font-weight:800;")
+                self.page_buttons_layout.addWidget(dots)
+                continue
+
+            button = QtWidgets.QPushButton(str(page))
+            button.setFixedSize(34, 36)
+            active = page == self._page
+            if active:
+                button.setStyleSheet(
+                    "QPushButton { background:#facc15;color:#111827;border:0;"
+                    "border-radius:5px;font-weight:800; }"
+                )
+            else:
+                button.setStyleSheet(
+                    "QPushButton { background:#4b5563;color:white;border:0;"
+                    "border-radius:5px;font-weight:800; }"
+                    "QPushButton:hover { background:#6b7280; }"
+                    "QPushButton:disabled { background:#1f2937;color:#64748b; }"
+                )
+            button.setEnabled(not active and not running)
+            button.clicked.connect(lambda _checked=False, p=page: self._set_page(p))
+            self.page_buttons_layout.addWidget(button)
+            self._page_buttons.append(button)
 
 
 class DramaWaveMovieSearchDialog(NetShortMovieSearchDialog):

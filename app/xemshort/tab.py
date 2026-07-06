@@ -24,7 +24,7 @@ from .dialogs import (
 from .helpers import _COLOR_TO_HEX, _ns_check_ffmpeg, _ns_load_bundled_fonts, _ns_color_to_ass
 from .movie_search_dialog import NetShortMovieSearchDialog
 from .models import XSMovie, XSEpisode
-from .workers import XSDownloadMergeWorker, XSFetchWorker
+from .workers import XSDownloadMergeWorker, XSFetchFromSupabaseWorker, XSFetchWorker
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -352,6 +352,18 @@ class XemShortTab(QtWidgets.QWidget):
             "QPushButton:disabled { background-color: #93c5fd; color: #fff; }")
         self.ns_fetch_btn.clicked.connect(self._ns_on_fetch)
         row1.addWidget(self.ns_fetch_btn)
+
+        self.ns_fetch_db_btn = QtWidgets.QPushButton("Lấy từ DB")
+        self.ns_fetch_db_btn.setStyleSheet(
+            "QPushButton { background-color: #059669; color: white; padding: 5px 14px; "
+            "border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #047857; }"
+            "QPushButton:disabled { background-color: #6ee7b7; color: #fff; }")
+        self.ns_fetch_db_btn.setToolTip(
+            "Lấy từ Supabase nestShort_crawl (không cần API, dùng dữ liệu đã crawl)"
+        )
+        self.ns_fetch_db_btn.clicked.connect(self._ns_on_fetch_from_db)
+        row1.addWidget(self.ns_fetch_db_btn)
         inp_vlay.addLayout(row1)
 
         # Row 2: utility buttons always visible
@@ -525,6 +537,30 @@ class XemShortTab(QtWidgets.QWidget):
         worker.log_msg.connect(lambda msg, _: self._log(f"[fetch] {msg}"))
         worker.finished.connect(
             lambda: self.ns_fetch_btn.setEnabled(not (self.nsworker and self.nsworker.isRunning())))
+        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(
+            lambda w=worker: self._fetch_workers.remove(w) if w in self._fetch_workers else None
+        )
+        worker.start()
+
+    def _ns_on_fetch_from_db(self) -> None:
+        """Fetch episodes from Supabase nestShort_crawl (bypass API)."""
+        movie_id = self.ns_movie_id_edit.text().strip()
+        if not movie_id:
+            QtWidgets.QMessageBox.warning(self, "Thiếu input", "Vui lòng nhập Movie ID.")
+            return
+        self.ns_fetch_db_btn.setEnabled(False)
+        self.ns_status.setText(f"Đang lấy từ DB: {movie_id}...")
+        self._log(f"[DB] Fetching từ nestShort_crawl: {movie_id}...")
+
+        worker = XSFetchFromSupabaseWorker(movie_id)
+        self._fetch_instance_id = worker.instance_id
+        self._fetch_workers.append(worker)
+
+        worker.success.connect(self._ns_on_fetch_success)
+        worker.error.connect(self._ns_on_fetch_error)
+        worker.log_msg.connect(lambda msg, _: self._log(f"[DB] {msg}"))
+        worker.finished.connect(lambda: self.ns_fetch_db_btn.setEnabled(True))
         worker.finished.connect(worker.deleteLater)
         worker.finished.connect(
             lambda w=worker: self._fetch_workers.remove(w) if w in self._fetch_workers else None
