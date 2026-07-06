@@ -15,11 +15,10 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QSettings, QTimer
 
-from .sync_movies_supabase import load_env_file
+from .sync_movies_supabase import DEFAULT_SUPABASE_KEY, DEFAULT_SUPABASE_URL, load_env_file
 from .queue_crawl_supabase import fetch_queue_requests, submit_queue_request
 
 _ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-_DEFAULT_SUPABASE_URL = "https://rmsxnajcudkjmtqsfhot.supabase.co"
 _SETTINGS_APP  = "Tool Movie XemShort"
 _SETTINGS_KEY  = "RequestQueueTab"
 _REFRESH_MS    = 30_000   # 30s auto-refresh
@@ -132,7 +131,7 @@ class RequestQueueTab(QtWidgets.QWidget):
 
     def __init__(self, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent)
-        self._supabase_url  = _DEFAULT_SUPABASE_URL
+        self._supabase_url  = DEFAULT_SUPABASE_URL
         self._supabase_key  = ""
         self._username      = ""
         self._submit_worker: _SubmitWorker | None = None
@@ -151,8 +150,8 @@ class RequestQueueTab(QtWidgets.QWidget):
 
     def _load_credentials(self) -> None:
         load_env_file(_ENV_PATH)
-        self._supabase_url = os.environ.get("SUPABASE_URL", _DEFAULT_SUPABASE_URL)
-        self._supabase_key = os.environ.get("SUPABASE_KEY", "")
+        self._supabase_url = os.environ.get("SUPABASE_URL", "").strip() or DEFAULT_SUPABASE_URL
+        self._supabase_key = os.environ.get("SUPABASE_KEY", "").strip() or DEFAULT_SUPABASE_KEY
 
     # ── UI ────────────────────────────────────────────────────────────────────
 

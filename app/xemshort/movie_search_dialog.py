@@ -8,6 +8,8 @@ from typing import Any
 from PySide6 import QtCore, QtGui, QtNetwork, QtWidgets
 
 from .sync_movies_supabase import (
+    DEFAULT_SUPABASE_KEY,
+    DEFAULT_SUPABASE_URL,
     DRAMAWAVE_SOURCE,
     NETSHORT_SOURCE,
     load_env_file,
@@ -16,8 +18,6 @@ from .sync_movies_supabase import (
 
 
 PAGE_SIZE = 24
-DEFAULT_SUPABASE_URL = "https://rmsxnajcudkjmtqsfhot.supabase.co"
-DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc3huYWpjdWRram10cXNmaG90Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDUyNDM5NSwiZXhwIjoyMDk2MTAwMzk1fQ.CvLi4fkjjSMbRaeKi85xC_d5MDCCkv2tcz4iuKinOgU"
 
 
 class NetShortSearchWorker(QtCore.QThread):

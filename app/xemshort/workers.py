@@ -1265,11 +1265,15 @@ class XSFetchFromSupabaseWorker(QtCore.QThread):
 
     def run(self) -> None:
         import os as _os
-        from .sync_movies_supabase import load_env_file
+        from .sync_movies_supabase import (
+            DEFAULT_SUPABASE_KEY,
+            DEFAULT_SUPABASE_URL,
+            load_env_file,
+        )
 
         load_env_file(self._ENV_PATH)
-        supabase_url: str = _os.environ.get("SUPABASE_URL", "")
-        supabase_key: str = _os.environ.get("SUPABASE_KEY", "")
+        supabase_url: str = _os.environ.get("SUPABASE_URL", "").strip() or DEFAULT_SUPABASE_URL
+        supabase_key: str = _os.environ.get("SUPABASE_KEY", "").strip() or DEFAULT_SUPABASE_KEY
 
         if not supabase_url or not supabase_key:
             self.error.emit(

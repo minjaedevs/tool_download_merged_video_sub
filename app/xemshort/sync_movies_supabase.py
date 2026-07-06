@@ -26,6 +26,10 @@ from urllib.parse import parse_qs
 import requests
 
 
+DEFAULT_SUPABASE_URL = "https://rmsxnajcudkjmtqsfhot.supabase.co"
+DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc3huYWpjdWRram10cXNmaG90Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDUyNDM5NSwiZXhwIjoyMDk2MTAwMzk1fQ.CvLi4fkjjSMbRaeKi85xC_d5MDCCkv2tcz4iuKinOgU"
+
+
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 HOME_URL = "https://api.xemshort.top/api/home"
 LOADMORE_API_URL = "https://api.xemshort.top/api/loadmore"
