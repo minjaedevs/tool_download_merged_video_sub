@@ -4,10 +4,11 @@ Luồng UX:
   - Lần đầu (chưa có tên): hiện màn hình nhập tên → xác nhận → chuyển sang UI chính
   - Sau đó: hiện "Xin chào {tên}" + input shortPlayId + bảng yêu cầu của riêng người dùng
   - Bảng tự làm mới mỗi 30s
-  - Cột bảng: shortPlayId | Status | Notes | Gửi lúc | Hoàn thành lúc
+  - Cột bảng: shortPlayId | Tên phim | Status | Notes | Gửi lúc | Hoàn thành lúc | Đã tải
 """
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,30 +19,132 @@ from PySide6.QtCore import QSettings, QTimer
 from .sync_movies_supabase import DEFAULT_SUPABASE_KEY, DEFAULT_SUPABASE_URL, load_env_file
 from .queue_crawl_supabase import fetch_queue_requests, submit_queue_request
 
-_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-_SETTINGS_APP  = "Tool Movie XemShort"
-_SETTINGS_KEY  = "RequestQueueTab"
-_REFRESH_MS    = 30_000   # 30s auto-refresh
+_ENV_PATH     = Path(__file__).resolve().parents[2] / ".env"
+_SETTINGS_APP = "Tool Movie XemShort"
+_SETTINGS_KEY = "RequestQueueTab"
+_REFRESH_MS   = 30_000   # 30s auto-refresh
 
-_STATUS_COLORS = {
-    "pending":    "#d97706",   # amber
-    "processing": "#2563eb",   # blue
-    "crawling":   "#2563eb",
-    "completed":  "#16a34a",   # green
-    "error":      "#dc2626",   # red
-    "failed":     "#dc2626",
-}
 
-_ROW_HIGHLIGHTS = {
-    "processing": "#dbeafe",
-    "crawling":   "#dbeafe",
-    "error":      "#fee2e2",
-    "failed":     "#fee2e2",
-}
+# ── Theme ─────────────────────────────────────────────────────────────────────
 
+def _is_dark() -> bool:
+    app = QtWidgets.QApplication.instance()
+    return bool(app and app.palette().color(QtGui.QPalette.Window).lightness() < 128)
+
+
+class _Tk:
+    """Color tokens — one instance per theme (light / dark)."""
+
+    def __init__(self, dark: bool) -> None:
+        self.dark = dark
+
+        if dark:
+            # backgrounds
+            self.bg_input     = "#1e293b"
+            self.bg_alt       = "#162032"
+            self.bg_header    = "#0f172a"
+            self.bg_selected  = "#1e3a5f"
+            # text
+            self.text         = "#e2e8f0"
+            self.text_muted   = "#94a3b8"
+            self.text_hint    = "#475569"
+            self.name_missing = "#475569"
+            # borders
+            self.border       = "#334155"
+            self.border_focus = "#60a5fa"
+            # status text (brighter for dark bg)
+            self.status = {
+                "pending":    "#fbbf24",
+                "processing": "#60a5fa",
+                "crawling":   "#60a5fa",
+                "completed":  "#4ade80",
+                "error":      "#f87171",
+                "failed":     "#f87171",
+            }
+            # row highlight backgrounds (dark, subtle)
+            self.hl = {
+                "processing": "#0f2d52",
+                "crawling":   "#0f2d52",
+                "error":      "#3b0f0f",
+                "failed":     "#3b0f0f",
+            }
+            # semantic
+            self.success      = "#4ade80"
+            self.warning      = "#fbbf24"
+            self.err          = "#f87171"
+            # wait-time banner
+            self.wait_text    = "#93c5fd"
+            self.wait_bg      = "#0c1a3d"
+            self.wait_border  = "#1d4ed8"
+            # default status label text
+            self.status_default = "#94a3b8"
+            # neutral/cancel button
+            self.btn_n_bg     = "#1e293b"
+            self.btn_n_border = "#475569"
+            self.btn_n_hover  = "#334155"
+            self.btn_n_text   = "#e2e8f0"
+            # disabled state
+            self.btn_dis_bg   = "#1e293b"
+            self.btn_dis_text = "#475569"
+            self.btn_dis_bdr  = "#334155"
+            # dl count label
+            self.dl_count     = "#a78bfa"
+        else:
+            # backgrounds
+            self.bg_input     = "#ffffff"
+            self.bg_alt       = "#f1f5f9"
+            self.bg_header    = "#f1f5f9"
+            self.bg_selected  = "#dbeafe"
+            # text
+            self.text         = "#1e293b"
+            self.text_muted   = "#64748b"
+            self.text_hint    = "#94a3b8"
+            self.name_missing = "#94a3b8"
+            # borders
+            self.border       = "#cbd5e1"
+            self.border_focus = "#2563eb"
+            # status text
+            self.status = {
+                "pending":    "#d97706",
+                "processing": "#2563eb",
+                "crawling":   "#2563eb",
+                "completed":  "#16a34a",
+                "error":      "#dc2626",
+                "failed":     "#dc2626",
+            }
+            # row highlight backgrounds
+            self.hl = {
+                "processing": "#dbeafe",
+                "crawling":   "#dbeafe",
+                "error":      "#fee2e2",
+                "failed":     "#fee2e2",
+            }
+            # semantic
+            self.success      = "#16a34a"
+            self.warning      = "#d97706"
+            self.err          = "#dc2626"
+            # wait-time banner
+            self.wait_text    = "#1e40af"
+            self.wait_bg      = "#eff6ff"
+            self.wait_border  = "#bfdbfe"
+            # default status label text
+            self.status_default = "#334155"
+            # neutral/cancel button
+            self.btn_n_bg     = "#ffffff"
+            self.btn_n_border = "#cbd5e1"
+            self.btn_n_hover  = "#f1f5f9"
+            self.btn_n_text   = "#334155"
+            # disabled state
+            self.btn_dis_bg   = "#f1f5f9"
+            self.btn_dis_text = "#94a3b8"
+            self.btn_dis_bdr  = "#e2e8f0"
+            # dl count label
+            self.dl_count     = "#7c3aed"
+
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
 
 def _timestamp_value(iso: str | None) -> float:
-    """Giá trị timestamp dùng để sort, dữ liệu thiếu/không hợp lệ xếp cuối."""
     if not iso:
         return 0.0
     try:
@@ -50,9 +153,21 @@ def _timestamp_value(iso: str | None) -> float:
         return 0.0
 
 
-class _TimeTableItem(QtWidgets.QTableWidgetItem):
-    """Hiển thị giờ đã format nhưng vẫn sort theo timestamp thật."""
+def _fmt_time(iso: str | None) -> str:
+    if not iso:
+        return ""
+    try:
+        ts = iso.replace("Z", "+00:00")
+        dt_local = datetime.fromisoformat(ts).astimezone()
+        today = datetime.now().date()
+        if dt_local.date() == today:
+            return dt_local.strftime("Hôm nay, %H:%M")
+        return dt_local.strftime("%d/%m %H:%M")
+    except Exception:
+        return iso[:16].replace("T", " ")
 
+
+class _TimeTableItem(QtWidgets.QTableWidgetItem):
     def __init__(self, text: str, iso: str | None):
         super().__init__(text)
         self._timestamp = _timestamp_value(iso)
@@ -63,37 +178,97 @@ class _TimeTableItem(QtWidgets.QTableWidgetItem):
         return super().__lt__(other)
 
 
-# ── Time formatting ───────────────────────────────────────────────────────────
+# ── Add Titles Dialog ─────────────────────────────────────────────────────────
 
-def _fmt_time(iso: str | None) -> str:
-    """Format ISO timestamp → 'HH:MM' (hôm nay) hoặc 'dd/mm HH:MM' (ngày khác)."""
-    if not iso:
-        return ""
-    try:
-        # Parse ISO (có thể có +00:00 hoặc Z)
-        ts = iso.replace("Z", "+00:00")
-        dt_utc = datetime.fromisoformat(ts)
-        # Chuyển sang local
-        dt_local = dt_utc.astimezone()
-        today = datetime.now().date()
-        if dt_local.date() == today:
-            return dt_local.strftime("Hôm nay, %H:%M")
-        return dt_local.strftime("%d/%m %H:%M")
-    except Exception:
-        return iso[:16].replace("T", " ")
+class _AddTitlesDialog(QtWidgets.QDialog):
+    """Dialog nhập danh sách tên phim đã tải — mỗi dòng một tên."""
+
+    def __init__(self, existing: set, parent=None):
+        super().__init__(parent)
+        tk = _Tk(_is_dark())
+
+        self.setWindowTitle("Tên phim đã tải")
+        self.setMinimumWidth(520)
+        self.setMinimumHeight(420)
+        self.setWindowFlags(self.windowFlags() & ~QtCore.Qt.WindowContextHelpButtonHint)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        lbl = QtWidgets.QLabel("Nhập tên phim đã tải <b>(mỗi dòng một tên)</b>:")
+        lbl.setStyleSheet(f"font-size: 13px; color: {tk.text};")
+        layout.addWidget(lbl)
+
+        self._edit = QtWidgets.QPlainTextEdit()
+        self._edit.setPlaceholderText(
+            "Ví dụ:\nBước Qua Bóng Tối\nChạy Trốn Tình Yêu\nCô Ta Quý Giá\n..."
+        )
+        self._edit.setFont(QtGui.QFont("Segoe UI", 10))
+        self._edit.setStyleSheet(
+            f"QPlainTextEdit {{ border: 1px solid {tk.border}; border-radius: 6px;"
+            f" padding: 6px; background-color: {tk.bg_input}; color: {tk.text}; }}"
+            f"QPlainTextEdit:focus {{ border-color: {tk.border_focus}; }}"
+        )
+        if existing:
+            self._edit.setPlainText("\n".join(sorted(existing)))
+        layout.addWidget(self._edit, stretch=1)
+
+        self._count_lbl = QtWidgets.QLabel("")
+        self._count_lbl.setStyleSheet(
+            f"color: {tk.dl_count}; font-size: 11px; font-weight: bold;"
+        )
+        layout.addWidget(self._count_lbl)
+        self._edit.textChanged.connect(self._update_count)
+        self._update_count()
+
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = QtWidgets.QPushButton("Hủy")
+        cancel_btn.setFixedHeight(34)
+        cancel_btn.setStyleSheet(
+            f"QPushButton {{ border: 1px solid {tk.btn_n_border}; border-radius: 4px;"
+            f" padding: 4px 20px; font-size: 12px; background-color: {tk.btn_n_bg};"
+            f" color: {tk.btn_n_text}; }}"
+            f"QPushButton:hover {{ background-color: {tk.btn_n_hover}; }}"
+        )
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        ok_btn = QtWidgets.QPushButton("Thêm")
+        ok_btn.setFixedHeight(34)
+        ok_btn.setDefault(True)
+        ok_btn.setStyleSheet(
+            "QPushButton { background-color: #7c3aed; color: white; padding: 4px 28px;"
+            " border-radius: 4px; font-weight: bold; font-size: 12px; border: none; }"
+            "QPushButton:hover { background-color: #6d28d9; }"
+        )
+        ok_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(ok_btn)
+
+        layout.addLayout(btn_layout)
+
+    def _update_count(self) -> None:
+        n = len(self.get_titles())
+        self._count_lbl.setText(f"{n} tên phim" if n else "")
+
+    def get_titles(self) -> set:
+        lines = self._edit.toPlainText().splitlines()
+        return {line.strip() for line in lines if line.strip()}
 
 
 # ── Workers ───────────────────────────────────────────────────────────────────
 
 class _SubmitWorker(QtCore.QThread):
-    done  = QtCore.Signal(dict)   # row dict trả về
+    done  = QtCore.Signal(dict)
     error = QtCore.Signal(str)
 
     def __init__(self, url: str, key: str, author: str, short_play_id: str, parent=None):
         super().__init__(parent)
-        self._url          = url
-        self._key          = key
-        self._author       = author
+        self._url           = url
+        self._key           = key
+        self._author        = author
         self._short_play_id = short_play_id
 
     def run(self) -> None:
@@ -131,16 +306,19 @@ class RequestQueueTab(QtWidgets.QWidget):
 
     def __init__(self, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent)
-        self._supabase_url  = DEFAULT_SUPABASE_URL
-        self._supabase_key  = ""
-        self._username      = ""
+        self._supabase_url   = DEFAULT_SUPABASE_URL
+        self._supabase_key   = ""
+        self._username       = ""
         self._submit_worker: _SubmitWorker | None = None
         self._refresh_worker: _RefreshWorker | None = None
+        self._downloaded_titles: set = set()
+        self._last_rows: list = []       # cache cho re-render khi đổi theme
+        self._tk = _Tk(_is_dark())
 
         self._load_credentials()
         self._build_ui()
+        self._apply_theme()
 
-        # Auto-refresh timer (chỉ kích hoạt khi đã có username)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._do_refresh)
 
@@ -153,19 +331,219 @@ class RequestQueueTab(QtWidgets.QWidget):
         self._supabase_url = os.environ.get("SUPABASE_URL", "").strip() or DEFAULT_SUPABASE_URL
         self._supabase_key = os.environ.get("SUPABASE_KEY", "").strip() or DEFAULT_SUPABASE_KEY
 
-    # ── UI ────────────────────────────────────────────────────────────────────
+    # ── Theme ─────────────────────────────────────────────────────────────────
+
+    def changeEvent(self, event: QtCore.QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() == QtCore.QEvent.PaletteChange:
+            new_dark = _is_dark()
+            if new_dark != self._tk.dark:
+                self._tk = _Tk(new_dark)
+                self._apply_theme()
+                # Re-populate table với màu mới
+                if self._last_rows:
+                    self._populate_table(self._last_rows)
+
+    def _apply_theme(self) -> None:
+        """Áp dụng toàn bộ màu sắc theo theme hiện tại."""
+        tk = self._tk
+
+        # ── Widget-level QSS (cascade xuống QGroupBox, QTableWidget, ...) ──
+        self.setStyleSheet(f"""
+            QGroupBox {{
+                color: {tk.text};
+                border: 1px solid {tk.border};
+                border-radius: 6px;
+                margin-top: 10px;
+                padding-top: 14px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 6px;
+                color: {tk.text_muted};
+            }}
+            QTableWidget {{
+                gridline-color: {tk.border};
+                color: {tk.text};
+                border: 1px solid {tk.border};
+                outline: none;
+                selection-background-color: {tk.bg_selected};
+                selection-color: {tk.text};
+            }}
+            QHeaderView::section {{
+                background-color: {tk.bg_header};
+                color: {tk.text};
+                border: none;
+                border-bottom: 2px solid {tk.border};
+                border-right: 1px solid {tk.border};
+                padding: 5px 8px;
+                font-weight: bold;
+                font-size: 12px;
+            }}
+            QHeaderView::section:last-child {{
+                border-right: none;
+            }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 8px;
+                margin: 0;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {tk.border};
+                border-radius: 4px;
+                min-height: 30px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0;
+            }}
+            QScrollBar:horizontal {{
+                background: transparent;
+                height: 8px;
+                margin: 0;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: {tk.border};
+                border-radius: 4px;
+                min-width: 30px;
+            }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0;
+            }}
+            QLabel {{
+                color: {tk.text};
+            }}
+        """)
+
+        # ── Table palette (base / alternate row colors) ──
+        if hasattr(self, "_table"):
+            pal = self._table.palette()
+            pal.setColor(QtGui.QPalette.Base, QtGui.QColor(tk.bg_input))
+            pal.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(tk.bg_alt))
+            pal.setColor(QtGui.QPalette.Text, QtGui.QColor(tk.text))
+            pal.setColor(QtGui.QPalette.HighlightedText, QtGui.QColor(tk.text))
+            pal.setColor(QtGui.QPalette.Highlight, QtGui.QColor(tk.bg_selected))
+            self._table.setPalette(pal)
+
+        # ── Name page widgets ──
+        if hasattr(self, "_name_page_title"):
+            self._name_page_title.setStyleSheet(
+                f"font-size: 16px; font-weight: bold; color: {tk.text};"
+            )
+        if hasattr(self, "_name_page_sub"):
+            self._name_page_sub.setStyleSheet(
+                f"color: {tk.text_muted}; font-size: 12px;"
+            )
+        if hasattr(self, "_name_edit"):
+            self._name_edit.setStyleSheet(
+                f"QLineEdit {{ border: 1px solid {tk.border}; border-radius: 6px;"
+                f" padding: 0 10px; font-size: 14px;"
+                f" background-color: {tk.bg_input}; color: {tk.text}; }}"
+                f"QLineEdit:focus {{ border-color: {tk.border_focus}; }}"
+            )
+        if hasattr(self, "_confirm_btn"):
+            self._confirm_btn.setStyleSheet(
+                "QPushButton { background-color: #3b82f6; color: white; border-radius: 4px;"
+                " padding: 4px 20px; font-weight: bold; font-size: 12px; }"
+                "QPushButton:hover { background-color: #2563eb; }"
+            )
+
+        # ── Main page: header ──
+        if hasattr(self, "_greeting_lbl"):
+            self._greeting_lbl.setStyleSheet(
+                f"font-size: 14px; font-weight: bold; color: {tk.text};"
+            )
+        if hasattr(self, "_change_btn"):
+            self._change_btn.setStyleSheet(
+                f"QPushButton {{ background-color: #F35D06; color: #FCFBFB;"
+                f" border: 1px solid {tk.border}; border-radius: 4px;"
+                f" padding: 4px 14px; font-weight: bold; font-size: 12px; }}"
+                f"QPushButton:hover {{ background-color: {tk.btn_n_hover};"
+                f" color: {tk.text}; border-color: {tk.border}; }}"
+                f"QPushButton:disabled {{ background-color: {tk.btn_dis_bg};"
+                f" color: {tk.btn_dis_text}; border-color: {tk.btn_dis_bdr}; }}"
+            )
+
+        # ── Main page: send group ──
+        if hasattr(self, "_id_edit"):
+            self._id_edit.setStyleSheet(
+                f"QLineEdit {{ border: 1px solid {tk.border}; border-radius: 4px;"
+                f" padding: 0 8px; font-size: 13px;"
+                f" background-color: {tk.bg_input}; color: {tk.text}; }}"
+                f"QLineEdit:focus {{ border-color: {tk.border_focus}; }}"
+            )
+        if hasattr(self, "_submit_btn"):
+            self._submit_btn.setStyleSheet(
+                "QPushButton { background-color: #3b82f6; color: white; padding: 4px 20px;"
+                " border-radius: 4px; font-weight: bold; font-size: 12px; border: none; }"
+                "QPushButton:hover { background-color: #2563eb; }"
+                f"QPushButton:disabled {{ background-color: {tk.btn_dis_bg};"
+                f" color: {tk.btn_dis_text}; border: 1px solid {tk.btn_dis_bdr}; }}"
+            )
+
+        # ── Main page: toolbar ──
+        if hasattr(self, "_refresh_btn"):
+            self._refresh_btn.setStyleSheet(
+                "QPushButton { background-color: #16a34a; color: #ffffff;"
+                f" border: 1px solid {tk.border}; border-radius: 4px;"
+                " padding: 4px 14px; font-weight: bold; font-size: 12px; }"
+                "QPushButton:hover { background-color: #15803d; }"
+                f"QPushButton:disabled {{ background-color: {tk.btn_dis_bg};"
+                f" color: {tk.btn_dis_text}; border-color: {tk.btn_dis_bdr}; }}"
+            )
+        if hasattr(self, "_info_lbl"):
+            self._info_lbl.setStyleSheet(f"color: {tk.text_muted}; font-size: 12px;")
+        if hasattr(self, "_next_refresh_lbl"):
+            self._next_refresh_lbl.setStyleSheet(f"color: {tk.text_hint}; font-size: 11px;")
+
+        # ── Main page: dl toolbar ──
+        if hasattr(self, "_add_titles_btn"):
+            self._add_titles_btn.setStyleSheet(
+                "QPushButton { background-color: #7c3aed; color: white; border: none;"
+                " border-radius: 4px; padding: 4px 14px; font-weight: bold; font-size: 12px; }"
+                "QPushButton:hover { background-color: #6d28d9; }"
+            )
+        if hasattr(self, "_pick_folder_btn"):
+            self._pick_folder_btn.setStyleSheet(
+                "QPushButton { background-color: #0891b2; color: white; border: none;"
+                " border-radius: 4px; padding: 4px 14px; font-weight: bold; font-size: 12px; }"
+                "QPushButton:hover { background-color: #0e7490; }"
+            )
+        if hasattr(self, "_dl_count_lbl"):
+            self._dl_count_lbl.setStyleSheet(
+                f"color: {tk.dl_count}; font-size: 11px; font-weight: bold;"
+            )
+
+        # ── Wait time banner ──
+        if hasattr(self, "_wait_time_lbl"):
+            self._wait_time_lbl.setStyleSheet(
+                f"color: {tk.wait_text}; background-color: {tk.wait_bg};"
+                f" border: 1px solid {tk.wait_border}; border-radius: 4px;"
+                " padding: 6px 10px; font-weight: bold; font-size: 12px;"
+            )
+
+        # ── Status label (re-apply with default color if no color override) ──
+        if hasattr(self, "_status_lbl"):
+            current_css = self._status_lbl.styleSheet()
+            if "color:" not in current_css or "#334155" in current_css or "#94a3b8" in current_css:
+                self._status_lbl.setStyleSheet(
+                    f"color: {tk.status_default}; padding: 2px 4px; font-size: 12px;"
+                )
+
+    # ── UI builder ────────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # QStackedWidget: page 0 = nhập tên, page 1 = UI chính
         self._stack = QtWidgets.QStackedWidget()
         root.addWidget(self._stack)
 
-        self._stack.addWidget(self._build_name_page())   # page 0
-        self._stack.addWidget(self._build_main_page())   # page 1
+        self._stack.addWidget(self._build_name_page())
+        self._stack.addWidget(self._build_main_page())
 
     # ── Page 0: Name setup ───────────────────────────────────────────────────
 
@@ -180,41 +558,32 @@ class RequestQueueTab(QtWidgets.QWidget):
         icon_lbl.setStyleSheet("font-size: 48px;")
         vbox.addWidget(icon_lbl)
 
-        title = QtWidgets.QLabel("Nhập tên của bạn để bắt đầu")
-        title.setAlignment(QtCore.Qt.AlignCenter)
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #1e293b;")
-        vbox.addWidget(title)
+        self._name_page_title = QtWidgets.QLabel("Nhập tên của bạn để bắt đầu")
+        self._name_page_title.setAlignment(QtCore.Qt.AlignCenter)
+        vbox.addWidget(self._name_page_title)
 
-        sub = QtWidgets.QLabel("Tên sẽ được lưu trên máy này và dùng để theo dõi yêu cầu của bạn.")
-        sub.setAlignment(QtCore.Qt.AlignCenter)
-        sub.setStyleSheet("color: #64748b; font-size: 12px;")
-        sub.setWordWrap(True)
-        vbox.addWidget(sub)
+        self._name_page_sub = QtWidgets.QLabel(
+            "Tên sẽ được lưu trên máy này và dùng để theo dõi yêu cầu của bạn."
+        )
+        self._name_page_sub.setAlignment(QtCore.Qt.AlignCenter)
+        self._name_page_sub.setWordWrap(True)
+        vbox.addWidget(self._name_page_sub)
 
         form = QtWidgets.QHBoxLayout()
         form.setSpacing(8)
+
         self._name_edit = QtWidgets.QLineEdit()
         self._name_edit.setPlaceholderText("Ví dụ: Lan, Minh, Team A...")
         self._name_edit.setMinimumWidth(240)
         self._name_edit.setMaximumWidth(340)
         self._name_edit.setFixedHeight(36)
         self._name_edit.returnPressed.connect(self._on_confirm_name)
-        self._name_edit.setStyleSheet(
-            "QLineEdit { border: 1px solid #cbd5e1; border-radius: 6px;"
-            " padding: 0 10px; font-size: 14px; }"
-            "QLineEdit:focus { border-color: #2563eb; }"
-        )
         form.addWidget(self._name_edit)
 
-        confirm_btn = QtWidgets.QPushButton("Xác nhận")
-        confirm_btn.setFixedHeight(36)
-        confirm_btn.setStyleSheet(
-            "QPushButton { background-color: #3b82f6; color: white; border-radius: 4px;"
-            " padding: 4px 20px; font-weight: bold; font-size: 12px; }"
-            "QPushButton:hover { background-color: #2563eb; }"
-        )
-        confirm_btn.clicked.connect(self._on_confirm_name)
-        form.addWidget(confirm_btn)
+        self._confirm_btn = QtWidgets.QPushButton("Xác nhận")
+        self._confirm_btn.setFixedHeight(36)
+        self._confirm_btn.clicked.connect(self._on_confirm_name)
+        form.addWidget(self._confirm_btn)
 
         form_wrapper = QtWidgets.QWidget()
         form_wrapper.setLayout(form)
@@ -230,25 +599,16 @@ class RequestQueueTab(QtWidgets.QWidget):
         vbox.setContentsMargins(14, 12, 14, 12)
         vbox.setSpacing(10)
 
-        # ── Header: greeting + đổi tên ───────────────────────────────────────
+        # ── Header ───────────────────────────────────────────────────────────
         header = QtWidgets.QHBoxLayout()
         self._greeting_lbl = QtWidgets.QLabel("")
-        self._greeting_lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #1e293b;"
-        )
         header.addWidget(self._greeting_lbl)
         header.addStretch()
 
-        change_btn = QtWidgets.QPushButton("Đổi tên")
-        change_btn.setStyleSheet(
-            "QPushButton { background-color: #F35D06; color: #FCFBFB; border: 1px solid #cbd5e1;"
-            " border-radius: 4px; padding: 4px 14px; font-weight: bold; font-size: 12px; }"
-            "QPushButton:hover { background-color: #cbd5e1; color: #1e293b; border-color: #94a3b8; }"
-            "QPushButton:disabled { background-color: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; }"
-        )
-        change_btn.setFlat(False)
-        change_btn.clicked.connect(self._on_change_name)
-        header.addWidget(change_btn)
+        self._change_btn = QtWidgets.QPushButton("Đổi tên")
+        self._change_btn.setFlat(False)
+        self._change_btn.clicked.connect(self._on_change_name)
+        header.addWidget(self._change_btn)
         vbox.addLayout(header)
 
         # ── Send group ───────────────────────────────────────────────────────
@@ -257,68 +617,75 @@ class RequestQueueTab(QtWidgets.QWidget):
         send_layout.setSpacing(8)
 
         send_layout.addWidget(QtWidgets.QLabel("shortPlayId:"))
+
         self._id_edit = QtWidgets.QLineEdit()
         self._id_edit.setPlaceholderText("Ví dụ: 2038899742804541441")
         self._id_edit.setMinimumWidth(220)
+        self._id_edit.setFixedHeight(32)
         self._id_edit.returnPressed.connect(self._on_submit)
         send_layout.addWidget(self._id_edit, stretch=1)
 
         self._submit_btn = QtWidgets.QPushButton("Gửi yêu cầu")
         self._submit_btn.setFixedHeight(32)
-        self._submit_btn.setStyleSheet(
-            "QPushButton { background-color: #3b82f6; color: white; padding: 4px 20px;"
-            " border-radius: 4px; font-weight: bold; font-size: 12px; }"
-            "QPushButton:hover { background-color: #2563eb; }"
-            "QPushButton:disabled { background-color: #93c5fd; color: #fff; }"
-        )
         self._submit_btn.clicked.connect(self._on_submit)
         send_layout.addWidget(self._submit_btn)
         vbox.addWidget(send_group)
 
-        # ── Status message ───────────────────────────────────────────────────
+        # ── Status ───────────────────────────────────────────────────────────
         self._status_lbl = QtWidgets.QLabel("")
         self._status_lbl.setWordWrap(True)
         self._status_lbl.setMinimumHeight(18)
         vbox.addWidget(self._status_lbl)
 
-        # ── Queue table ──────────────────────────────────────────────────────
+        # ── Queue group ──────────────────────────────────────────────────────
         queue_group = QtWidgets.QGroupBox("Yêu cầu của bạn")
         queue_vbox = QtWidgets.QVBoxLayout(queue_group)
         queue_vbox.setSpacing(6)
 
+        # toolbar row 1
         toolbar = QtWidgets.QHBoxLayout()
         self._refresh_btn = QtWidgets.QPushButton("Làm mới")
-        self._refresh_btn.setStyleSheet(
-            "QPushButton { background-color: #1DEB0A; color: #0A0A0A; border: 1px solid #cbd5e1;"
-            " border-radius: 4px; padding: 4px 14px; font-weight: bold; font-size: 12px; }"
-            "QPushButton:hover { background-color: #cbd5e1; color: #1e293b; border-color: #94a3b8; }"
-            "QPushButton:disabled { background-color: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; }"
-        )
         self._refresh_btn.clicked.connect(self._do_refresh)
         toolbar.addWidget(self._refresh_btn)
 
         self._info_lbl = QtWidgets.QLabel("")
-        self._info_lbl.setStyleSheet("color: #64748b; font-size: 12px;")
         toolbar.addWidget(self._info_lbl)
         toolbar.addStretch()
 
         self._next_refresh_lbl = QtWidgets.QLabel("")
-        self._next_refresh_lbl.setStyleSheet("color: #94a3b8; font-size: 11px;")
         toolbar.addWidget(self._next_refresh_lbl)
-
         queue_vbox.addLayout(toolbar)
 
-        self._wait_time_lbl = QtWidgets.QLabel("")
-        self._wait_time_lbl.setStyleSheet(
-            "color: #1e40af; background-color: #eff6ff; border: 1px solid #bfdbfe;"
-            " border-radius: 4px; padding: 6px 10px; font-weight: bold; font-size: 12px;"
+        # toolbar row 2: downloaded management
+        dl_toolbar = QtWidgets.QHBoxLayout()
+        dl_toolbar.setSpacing(6)
+
+        self._add_titles_btn = QtWidgets.QPushButton("+ Tên phim đã tải")
+        self._add_titles_btn.setToolTip("Nhập thủ công danh sách tên phim đã tải")
+        self._add_titles_btn.clicked.connect(self._on_add_titles)
+        dl_toolbar.addWidget(self._add_titles_btn)
+
+        self._pick_folder_btn = QtWidgets.QPushButton("Chọn thư mục phim đã tải")
+        self._pick_folder_btn.setToolTip(
+            "Quét tên các thư mục con trong folder để tự động thêm danh sách phim đã tải"
         )
+        self._pick_folder_btn.clicked.connect(self._on_pick_folder)
+        dl_toolbar.addWidget(self._pick_folder_btn)
+
+        self._dl_count_lbl = QtWidgets.QLabel("")
+        dl_toolbar.addWidget(self._dl_count_lbl)
+        dl_toolbar.addStretch()
+        queue_vbox.addLayout(dl_toolbar)
+
+        # wait time banner
+        self._wait_time_lbl = QtWidgets.QLabel("")
         self._wait_time_lbl.setVisible(False)
         queue_vbox.addWidget(self._wait_time_lbl)
 
-        self._table = QtWidgets.QTableWidget(0, 6)
+        # table
+        self._table = QtWidgets.QTableWidget(0, 7)
         self._table.setHorizontalHeaderLabels(
-            ["shortPlayId", "Tên phim", "Status", "Notes", "Gửi lúc", "Hoàn thành lúc"]
+            ["shortPlayId", "Tên phim", "Status", "Notes", "Gửi lúc", "Hoàn thành lúc", "Đã tải"]
         )
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
@@ -327,6 +694,7 @@ class RequestQueueTab(QtWidgets.QWidget):
         hh.setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
         hh.setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
         hh.setSectionResizeMode(5, QtWidgets.QHeaderView.ResizeToContents)
+        hh.setSectionResizeMode(6, QtWidgets.QHeaderView.ResizeToContents)
         hh.setStretchLastSection(False)
         self._table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
@@ -347,6 +715,12 @@ class RequestQueueTab(QtWidgets.QWidget):
     def _load_settings(self) -> None:
         s = QSettings(_SETTINGS_APP, _SETTINGS_KEY)
         self._username = s.value("username", "", type=str)
+        raw = s.value("downloaded_titles", "[]", type=str)
+        try:
+            self._downloaded_titles = set(json.loads(raw))
+        except Exception:
+            self._downloaded_titles = set()
+        self._update_dl_count_label()
         if self._username:
             self._activate_main_page()
         else:
@@ -355,6 +729,76 @@ class RequestQueueTab(QtWidgets.QWidget):
     def _save_username(self, name: str) -> None:
         QSettings(_SETTINGS_APP, _SETTINGS_KEY).setValue("username", name)
         self._username = name
+
+    def _save_downloaded(self) -> None:
+        QSettings(_SETTINGS_APP, _SETTINGS_KEY).setValue(
+            "downloaded_titles", json.dumps(sorted(self._downloaded_titles))
+        )
+
+    # ── Downloaded titles ─────────────────────────────────────────────────────
+
+    def _is_downloaded(self, name: str) -> bool:
+        if not name:
+            return False
+        name_norm = name.strip().lower()
+        return any(t.strip().lower() == name_norm for t in self._downloaded_titles)
+
+    def _update_dl_count_label(self) -> None:
+        n = len(self._downloaded_titles)
+        self._dl_count_lbl.setText(f"({n} phim đã tải)" if n else "")
+
+    def _on_add_titles(self) -> None:
+        dlg = _AddTitlesDialog(self._downloaded_titles, parent=self)
+        if dlg.exec() == QtWidgets.QDialog.Accepted:
+            self._downloaded_titles = dlg.get_titles()
+            self._save_downloaded()
+            self._update_dl_count_label()
+            self._refresh_downloaded_column()
+
+    def _on_pick_folder(self) -> None:
+        folder = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Chọn thư mục chứa phim đã tải", ""
+        )
+        if not folder:
+            return
+        path = Path(folder)
+        sub_names = {d.name for d in path.iterdir() if d.is_dir()}
+        if not sub_names:
+            QtWidgets.QMessageBox.information(
+                self, "Không tìm thấy",
+                f"Không có thư mục phim nào trong:\n{folder}"
+            )
+            return
+        added = sub_names - self._downloaded_titles
+        self._downloaded_titles |= sub_names
+        self._save_downloaded()
+        self._update_dl_count_label()
+        self._refresh_downloaded_column()
+        QtWidgets.QMessageBox.information(
+            self, "Đã thêm",
+            f"Thêm {len(added)} tên phim mới từ thư mục.\n"
+            f"Tổng cộng: {len(self._downloaded_titles)} phim đã tải."
+        )
+
+    def _refresh_downloaded_column(self) -> None:
+        for r in range(self._table.rowCount()):
+            name_item = self._table.item(r, 1)
+            name = name_item.text() if name_item else ""
+            if name == "—":
+                name = ""
+            self._table.setItem(r, 6, self._make_dl_item(name))
+
+    def _make_dl_item(self, name: str) -> QtWidgets.QTableWidgetItem:
+        downloaded = self._is_downloaded(name)
+        item = QtWidgets.QTableWidgetItem("✓" if downloaded else "")
+        item.setTextAlignment(QtCore.Qt.AlignCenter)
+        if downloaded:
+            item.setForeground(QtGui.QColor(self._tk.success))
+            font = item.font()
+            font.setBold(True)
+            font.setPointSize(font.pointSize() + 2)
+            item.setFont(font)
+        return item
 
     # ── Name flow ─────────────────────────────────────────────────────────────
 
@@ -393,7 +837,7 @@ class RequestQueueTab(QtWidgets.QWidget):
             return
 
         self._submit_btn.setEnabled(False)
-        self._set_status("Đang gửi...", "#475569")
+        self._set_status("Đang gửi...", self._tk.text_muted)
 
         self._submit_worker = _SubmitWorker(
             self._supabase_url, self._supabase_key,
@@ -408,11 +852,9 @@ class RequestQueueTab(QtWidgets.QWidget):
     def _on_submit_done(self, row: dict) -> None:
         self._submit_btn.setEnabled(True)
         already_exists = bool(row and row.get("_already_exists"))
-        # Lấy short_play_id trước khi clear input
         short_play_id = self._id_edit.text().strip()
         self._id_edit.clear()
 
-        # Nếu Supabase không trả về row đầy đủ, tự tạo placeholder
         if not row or not row.get("shortPlayId"):
             row = {
                 "shortPlayId": short_play_id,
@@ -427,21 +869,17 @@ class RequestQueueTab(QtWidgets.QWidget):
         status = row.get("status", "pending")
         if already_exists:
             message = f"Tập {short_play_id} đã có trong hàng đợi."
-            self._set_status(message, "#d97706")
+            self._set_status(message, self._tk.warning)
             QtWidgets.QMessageBox.information(self, "Tập đã tồn tại", message)
             return
-        else:
-            self._set_status(f"Đã gửi — status: {status}", "#16a34a")
+        self._set_status(f"Đã gửi — status: {status}", self._tk.success)
 
-        # Thêm row vào table ngay lập tức (không chờ refresh)
         self._insert_or_update_row(row)
-
-        # Refresh trong background để đồng bộ data thật
         QtCore.QTimer.singleShot(800, self._force_refresh)
 
     def _on_submit_error(self, msg: str) -> None:
         self._submit_btn.setEnabled(True)
-        self._set_status(f"Lỗi gửi yêu cầu: {msg}", "#dc2626")
+        self._set_status(f"Lỗi gửi yêu cầu: {msg}", self._tk.err)
 
     # ── Refresh ───────────────────────────────────────────────────────────────
 
@@ -458,9 +896,7 @@ class RequestQueueTab(QtWidgets.QWidget):
         self._refresh_btn.setEnabled(False)
         self._info_lbl.setText("Đang tải...")
 
-        self._refresh_worker = _RefreshWorker(
-            self._supabase_url, self._supabase_key,
-        )
+        self._refresh_worker = _RefreshWorker(self._supabase_url, self._supabase_key)
         self._refresh_worker.data_ready.connect(self._on_data_ready)
         self._refresh_worker.error.connect(self._on_refresh_error)
         self._refresh_worker.finished.connect(self._refresh_worker.deleteLater)
@@ -470,12 +906,13 @@ class RequestQueueTab(QtWidgets.QWidget):
     def _on_data_ready(self, all_rows: list, pending_rows: list) -> None:
         self._refresh_btn.setEnabled(True)
 
-        # Filter: chỉ hiện request của user này (username xuất hiện trong author array)
         my_rows = [
             r for r in all_rows
             if self._username in (r.get("author") or [])
         ]
         my_rows.sort(key=lambda row: _timestamp_value(row.get("created_at")), reverse=True)
+
+        self._last_rows = my_rows
         self._populate_table(my_rows)
         self._update_wait_time(pending_rows, all_rows)
 
@@ -507,9 +944,7 @@ class RequestQueueTab(QtWidgets.QWidget):
         self._table.sortItems(4, QtCore.Qt.DescendingOrder)
 
     def _insert_or_update_row(self, row: dict) -> None:
-        """Thêm hoặc cập nhật một row trong table ngay lập tức (không cần refresh)."""
         short_play_id = str(row.get("shortPlayId") or "")
-        # Tìm row đã tồn tại trong table (theo shortPlayId cột 0)
         for r in range(self._table.rowCount()):
             item = self._table.item(r, 0)
             if item and item.text() == short_play_id:
@@ -518,7 +953,6 @@ class RequestQueueTab(QtWidgets.QWidget):
                 self._table.setSortingEnabled(True)
                 self._table.sortItems(4, QtCore.Qt.DescendingOrder)
                 return
-        # Chèn row mới lên đầu
         self._table.setSortingEnabled(False)
         self._table.insertRow(0)
         self._fill_table_row(0, row)
@@ -526,7 +960,7 @@ class RequestQueueTab(QtWidgets.QWidget):
         self._table.sortItems(4, QtCore.Qt.DescendingOrder)
 
     def _fill_table_row(self, r: int, row: dict) -> None:
-        """Điền dữ liệu vào một hàng của table."""
+        tk = self._tk
         short_play_id = str(row.get("shortPlayId") or "")
         name          = str(row.get("name") or "")
         status        = str(row.get("status") or "pending")
@@ -538,11 +972,11 @@ class RequestQueueTab(QtWidgets.QWidget):
 
         name_item = QtWidgets.QTableWidgetItem(name if name else "—")
         if not name:
-            name_item.setForeground(QtGui.QColor("#94a3b8"))
+            name_item.setForeground(QtGui.QColor(tk.name_missing))
         self._table.setItem(r, 1, name_item)
 
         status_item = QtWidgets.QTableWidgetItem(status)
-        status_item.setForeground(QtGui.QColor(_STATUS_COLORS.get(status, "#475569")))
+        status_item.setForeground(QtGui.QColor(tk.status.get(status, tk.text_muted)))
         font = status_item.font()
         font.setBold(status in ("processing", "crawling"))
         status_item.setFont(font)
@@ -553,23 +987,25 @@ class RequestQueueTab(QtWidgets.QWidget):
 
         done_item = _TimeTableItem(done_at, row.get("completed_at"))
         if done_at:
-            done_item.setForeground(QtGui.QColor("#16a34a"))
+            done_item.setForeground(QtGui.QColor(tk.success))
         self._table.setItem(r, 5, done_item)
 
-        background = _ROW_HIGHLIGHTS.get(status)
-        if background:
-            brush = QtGui.QBrush(QtGui.QColor(background))
-            for column in range(self._table.columnCount()):
-                item = self._table.item(r, column)
+        self._table.setItem(r, 6, self._make_dl_item(name))
+
+        # Row highlight background
+        hl_color = tk.hl.get(status)
+        if hl_color:
+            brush = QtGui.QBrush(QtGui.QColor(hl_color))
+            for col in range(self._table.columnCount()):
+                item = self._table.item(r, col)
                 if item is not None:
                     item.setBackground(brush)
 
     def _update_wait_time(self, pending_rows: list, recent_rows: list) -> None:
-        """Ước tính lượt của request pending cũ nhất của user theo FIFO, 10 phút/row."""
         pending_rows.sort(key=lambda row: _timestamp_value(row.get("created_at")))
 
         my_position = next(
-            (index for index, row in enumerate(pending_rows)
+            (i for i, row in enumerate(pending_rows)
              if self._username in (row.get("author") or [])),
             None,
         )
@@ -602,7 +1038,6 @@ class RequestQueueTab(QtWidgets.QWidget):
         self._wait_time_lbl.setVisible(True)
 
     def _force_refresh(self) -> None:
-        """Refresh bất kể worker cũ có đang chạy không."""
         self._refresh_worker = None
         self._do_refresh()
 
@@ -623,6 +1058,7 @@ class RequestQueueTab(QtWidgets.QWidget):
 
     # ── Helper ────────────────────────────────────────────────────────────────
 
-    def _set_status(self, text: str, color: str = "#334155") -> None:
+    def _set_status(self, text: str, color: str = "") -> None:
+        clr = color or self._tk.status_default
         self._status_lbl.setText(text)
-        self._status_lbl.setStyleSheet(f"color: {color}; padding: 2px 4px; font-size: 12px;")
+        self._status_lbl.setStyleSheet(f"color: {clr}; padding: 2px 4px; font-size: 12px;")
