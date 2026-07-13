@@ -918,9 +918,10 @@ class XSEpisodePickerDialog(QtWidgets.QDialog):
         layout.setSpacing(8)
 
         checkbox = QtWidgets.QCheckBox()
-        # Locked episodes: uncheck by default and disable to prevent accidental selection
-        # Lock khi thiếu video URL hoặc sub URL (cần cả 2 để merge).
-        is_locked = not ep.play or not ep.subtitle_url
+        # Use pre-computed ep.is_locked from model (set per-provider during parsing).
+        # NetShort: locked when missing play OR subtitle URL.
+        # DramaWave DB: locked only when missing play URL (subtitle not required).
+        is_locked = ep.is_locked
         checkbox.setChecked(not is_locked)
         checkbox.setEnabled(not is_locked)
         if is_locked:

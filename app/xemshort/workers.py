@@ -1326,12 +1326,12 @@ class XSFetchFromSupabaseWorker(QtCore.QThread):
             raw: dict = row.get("raw") or {}
             if not raw:
                 self.error.emit(
-                    "raw JSON rỗng trong nestShort_crawl.", self.instance_id
+                    f"raw JSON rỗng trong {self._TABLE}.", self.instance_id
                 )
                 return
 
             show_name: str = row.get("showName") or raw.get("showName", "")
-            episodes = _ns_parse_episodes(raw, show_name)
+            episodes = self._parse_raw_episodes(raw, show_name)
 
             if not episodes:
                 self.error.emit(
@@ -1349,3 +1349,20 @@ class XSFetchFromSupabaseWorker(QtCore.QThread):
 
         except Exception as exc:
             self.error.emit(str(exc), self.instance_id)
+
+    def _parse_raw_episodes(self, raw: dict, show_name: str) -> list:
+        """Parse raw DB JSON into XSEpisode list. Override for provider-specific lock logic."""
+        return _ns_parse_episodes(raw, show_name)
+
+
+class DramaWaveFetchFromSupabaseWorker(XSFetchFromSupabaseWorker):
+    """Fetch episodes from dramawave_crawl instead of nestShort_crawl."""
+
+    _TABLE = "dramawave_crawl"
+
+    def _parse_raw_episodes(self, raw: dict, show_name: str) -> list:
+        """DramaWave: lock only when play URL is missing (subtitle not required)."""
+        episodes = _ns_parse_episodes(raw, show_name)
+        for ep in episodes:
+            ep.is_locked = not ep.play
+        return episodes

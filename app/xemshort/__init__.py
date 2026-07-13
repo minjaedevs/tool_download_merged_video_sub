@@ -2,6 +2,7 @@
 from .models import NSMovie, NSEpisode, XSEpisode, XSMovie
 from .workers import (
     DramaWaveDownloadMergeWorker,
+    DramaWaveFetchFromSupabaseWorker,
     DramaWaveFetchWorker,
     NSDownloadMergeWorker,
     NSFetchWorker,
@@ -33,7 +34,7 @@ __all__ = [
     # workers
     "NSFetchWorker", "NSDownloadMergeWorker",
     "XSFetchWorker", "XSFetchFromSupabaseWorker", "XSDownloadMergeWorker",
-    "DramaWaveFetchWorker", "DramaWaveDownloadMergeWorker",
+    "DramaWaveFetchWorker", "DramaWaveFetchFromSupabaseWorker", "DramaWaveDownloadMergeWorker",
     # dialogs (XS = current, NS = backward-compat)
     "XSDetailDialog", "XSEpisodePickerDialog", "XSPasteJsonDialog",
     "XSVideoPopup", "XSVttEditorDialog",
