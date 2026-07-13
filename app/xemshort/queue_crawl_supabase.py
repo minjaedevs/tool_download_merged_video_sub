@@ -40,11 +40,12 @@ def submit_queue_request(
     supabase_key: str,
     author: str,
     short_play_id: str,
+    provider: str = "netshort",
 ) -> dict:
     """
     Upsert a crawl request into the queue.
 
-    - If shortPlayId already exists → return immediately, do not update anything
+    - If shortPlayId + provider already exists → return immediately, do not update anything
     - If new → create row with status='pending'
 
     Returns the resulting row dict.
@@ -53,11 +54,15 @@ def submit_queue_request(
     endpoint = f"{base}/{TABLE_QUEUE}"
     headers = _supabase_headers(supabase_key, "return=representation")
 
-    # Check existence
+    # Check existence (scoped to provider so same ID can exist for different providers)
     resp = requests.get(
         endpoint,
         headers=headers,
-        params={"shortPlayId": f"eq.{short_play_id}", "select": "*"},
+        params={
+            "shortPlayId": f"eq.{short_play_id}",
+            "provider": f"eq.{provider}",
+            "select": "*",
+        },
         timeout=30,
     )
     resp.raise_for_status()
@@ -74,6 +79,7 @@ def submit_queue_request(
                 "shortPlayId": short_play_id,
                 "author": [author],
                 "status": "pending",
+                "provider": provider,
                 "created_at": _now_iso(),
                 "updated_at": _now_iso(),
             }),
@@ -89,8 +95,9 @@ def fetch_queue_requests(
     supabase_key: str,
     status: str | None = None,
     limit: int | None = 100,
+    provider: str | None = None,
 ) -> list[dict]:
-    """Return queue rows ordered newest-first, optionally filtered by status."""
+    """Return queue rows ordered newest-first, optionally filtered by status and/or provider."""
     base = _base(supabase_url)
     endpoint = f"{base}/{TABLE_QUEUE}"
     headers = _supabase_headers(supabase_key, "return=representation")
@@ -98,6 +105,8 @@ def fetch_queue_requests(
     params: dict[str, str] = {"select": "*", "order": "created_at.desc"}
     if status:
         params["status"] = f"eq.{status}"
+    if provider:
+        params["provider"] = f"eq.{provider}"
 
     rows: list[dict] = []
     offset = 0
