@@ -80,8 +80,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         tab_widget.addTab(xs_tab, "NetShort")
 
         # Tab 2: DramaWave
-        # dramawave_tab = DramaWaveTab()
-        # tab_widget.addTab(dramawave_tab, "DramaWave")
+        dramawave_tab = DramaWaveTab()
+        tab_widget.addTab(dramawave_tab, "DramaWave")
 
         phimngan_tab = PhimNganTab()
         tab_widget.addTab(phimngan_tab, "phimngan.tv")
