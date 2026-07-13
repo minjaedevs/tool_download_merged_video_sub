@@ -83,8 +83,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         dramawave_tab = DramaWaveTab()
         tab_widget.addTab(dramawave_tab, "DramaWave")
 
-        phimngan_tab = PhimNganTab()
-        tab_widget.addTab(phimngan_tab, "phimngan.tv")
+        # phimngan_tab = PhimNganTab()
+        # tab_widget.addTab(phimngan_tab, "phimngan.tv")
 
         # Tab: MP4 → M3U8 converter
         mp4_m3u8_tab = Mp4ToM3U8Tab()
