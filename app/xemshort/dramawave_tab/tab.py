@@ -9,7 +9,11 @@ from PySide6.QtCore import QSettings
 from ..models import XSEpisode, XSMovie
 from ..movie_search_dialog import DramaWaveMovieSearchDialog
 from ..tab import XemShortTab
-from ..workers import DramaWaveDownloadMergeWorker, DramaWaveFetchWorker
+from ..workers import (
+    DramaWaveDownloadMergeWorker,
+    DramaWaveFetchFromSupabaseWorker,
+    DramaWaveFetchWorker,
+)
 
 
 _DW_APP_NAME = "XemShort GUI"
@@ -102,6 +106,30 @@ class DramaWaveTab(XemShortTab):
         self.ns_status.setText(f"Fetched DramaWave {len(episodes)} tap.")
         self._log(f"Fetched DramaWave {len(episodes)} tap.")
         self._ns_show_picker(episodes, name, movie_id)
+
+    def _ns_on_fetch_from_db(self) -> None:
+        """Fetch episodes từ Supabase dramawave_crawl (bypass API)."""
+        movie_id = self.ns_movie_id_edit.text().strip()
+        if not movie_id:
+            QtWidgets.QMessageBox.warning(self, "Thiếu input", "Vui lòng nhập Movie ID.")
+            return
+        self.ns_fetch_db_btn.setEnabled(False)
+        self.ns_status.setText(f"Đang lấy từ DB: {movie_id}...")
+        self._log(f"[DB] Fetching từ dramawave_crawl: {movie_id}...")
+
+        worker = DramaWaveFetchFromSupabaseWorker(movie_id)
+        self._fetch_instance_id = worker.instance_id
+        self._fetch_workers.append(worker)
+
+        worker.success.connect(self._ns_on_fetch_success)
+        worker.error.connect(self._ns_on_fetch_error)
+        worker.log_msg.connect(lambda msg, _: self._log(f"[DB] {msg}"))
+        worker.finished.connect(lambda: self.ns_fetch_db_btn.setEnabled(True))
+        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(
+            lambda w=worker: self._fetch_workers.remove(w) if w in self._fetch_workers else None
+        )
+        worker.start()
 
     def _create_download_worker(self, movie: XSMovie, **kwargs) -> DramaWaveDownloadMergeWorker:
         return DramaWaveDownloadMergeWorker(movie, **kwargs)
