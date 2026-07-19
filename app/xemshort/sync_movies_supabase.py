@@ -39,11 +39,13 @@ LOADMORE_URL = (
 )
 NETSHORT_SOURCE = "netshort"
 DRAMAWAVE_SOURCE = "dramawave"
+XSHORT_SOURCE = "xshort"
 MOVIE_SOURCES = {
     "netshort": {"name": "NetShort", "table": "netshort_movies", "sync_enabled": True},
     "reelshort": {"name": "ReelShort", "table": "reelshort_movies", "sync_enabled": False},
     "shortmax": {"name": "ShortMax", "table": "shortmax_movies", "sync_enabled": False},
     "dramawave": {"name": "DramaWave", "table": "dramawave_movies", "sync_enabled": True},
+    "xshort": {"name": "Xshort", "table": "xshort_movies", "sync_enabled": True},
     "dramabox": {"name": "DramaBox", "table": "dramabox_movies", "sync_enabled": False},
 }
 
@@ -488,7 +490,7 @@ def search_movies_supabase(supabase_url: str, supabase_key: str, query: str = ""
     headers["Prefer"] = "count=exact"
     offset = (page - 1) * page_size
     select_columns = "play_id,name,thumbnail,intro,label_list,search_text,search_text_ascii,created_at,synced_at"
-    if source == DRAMAWAVE_SOURCE:
+    if source in {DRAMAWAVE_SOURCE, XSHORT_SOURCE}:
         select_columns = (
             "play_id,name,thumbnail,intro,label_list,episode_count,"
             "search_text,search_text_ascii,source_api,created_at,synced_at"

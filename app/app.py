@@ -21,6 +21,7 @@ from ui.main_window import Ui_MainWindow
 from utils import BIN_DIR, ROOT, load_toml, save_toml
 from update_version import Updater
 from xemshort import DramaWaveTab, MovieManagerTab, RequestQueueTab, XemShortTab
+from xshort import XshortTab
 from phimngan import PhimNganTab
 from mp4tom3u8 import Mp4ToM3U8Tab
 from m3u8.m3utab import M3U8ProTab, M3U8Tab
@@ -78,6 +79,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Tab 1: XemShort
         xs_tab = XemShortTab()
         tab_widget.addTab(xs_tab, "NetShort")
+
+        # Tab: Xshort downloader
+        xshort_tab = XshortTab()
+        tab_widget.addTab(xshort_tab, "Xshort")
 
         # Tab 2: DramaWave
         dramawave_tab = DramaWaveTab()
