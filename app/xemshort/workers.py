@@ -4,6 +4,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -13,6 +14,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urljoin
 
 import requests
 import urllib3
@@ -76,6 +78,36 @@ DRAMAWAVE_API_HEADERS = {
 }
 
 _MERGE_SIDECAR_FILE = ".merge_settings.json"
+
+
+def _rewrite_hls_playlist_urls(content: bytes, base_url: str) -> bytes:
+    """Make relative HLS playlist URIs absolute before saving to a local file."""
+    text = content.decode("utf-8-sig", errors="replace")
+    out_lines: list[str] = []
+
+    def _rewrite_uri_attr(match: re.Match[str]) -> str:
+        quote = match.group(1)
+        uri = match.group(2)
+        if uri.startswith(("http://", "https://", "data:")):
+            return match.group(0)
+        return f"URI={quote}{urljoin(base_url, uri)}{quote}"
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            out_lines.append(
+                re.sub(r'URI=(["\'])([^"\']+)\1', _rewrite_uri_attr, line)
+            )
+            continue
+        if not stripped or stripped.startswith("#"):
+            out_lines.append(line)
+            continue
+        if stripped.startswith(("http://", "https://", "data:")):
+            out_lines.append(line)
+            continue
+        prefix_len = len(line) - len(line.lstrip())
+        out_lines.append(line[:prefix_len] + urljoin(base_url, stripped))
+    return ("\n".join(out_lines) + "\n").encode("utf-8")
 
 # ── GPU encoder detection ─────────────────────────────────────────────────────
 
@@ -1116,7 +1148,10 @@ class DramaWaveDownloadMergeWorker(XSDownloadMergeWorker):
                 preview = response.content[:300].decode("utf-8", errors="replace")
                 self.log(f"{desc}: playlist khong hop le: {preview}")
                 return False
-            playlist_tmp.write_bytes(response.content)
+            playlist_content = _rewrite_hls_playlist_urls(response.content, response.url)
+            if playlist_content != response.content:
+                self.log(f"{desc}: rewrite HLS relative URLs -> absolute")
+            playlist_tmp.write_bytes(playlist_content)
         except Exception as exc:
             self.log(f"LOI {desc} khi tai playlist HLS/m3u: {exc}")
             return False
