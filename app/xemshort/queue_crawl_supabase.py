@@ -45,8 +45,10 @@ def submit_queue_request(
     """
     Upsert a crawl request into the queue.
 
-    - If shortPlayId + provider already exists → return immediately, do not update anything
-    - If new → create row with status='pending'
+    - New row               → create with status='pending'
+    - Exists + completed    → return with _already_completed=True  (notify user)
+    - Exists + error/failed → PATCH reset to pending, return with _reset_from_error=True
+    - Exists + other status → return with _already_exists=True     (pending / processing)
 
     Returns the resulting row dict.
     """
@@ -70,24 +72,53 @@ def submit_queue_request(
 
     if rows:
         row = rows[0]
+        status = str(row.get("status") or "pending")
+
+        if status == "completed":
+            return {**row, "_already_completed": True}
+
+        if status in ("error", "failed"):
+            # Reset to pending so the crawler will retry
+            patch = requests.patch(
+                endpoint,
+                headers=_supabase_headers(supabase_key, "return=representation"),
+                params={
+                    "shortPlayId": f"eq.{short_play_id}",
+                    "provider": f"eq.{provider}",
+                },
+                data=json.dumps({
+                    "status": "pending",
+                    "notes": None,
+                    "updated_at": _now_iso(),
+                }),
+                timeout=30,
+            )
+            patch.raise_for_status()
+            updated = patch.json()
+            updated_row = (
+                updated[0] if isinstance(updated, list) and updated
+                else {**row, "status": "pending", "notes": None}
+            )
+            return {**updated_row, "_reset_from_error": True}
+
         return {**row, "_already_exists": True}
-    else:
-        post = requests.post(
-            endpoint,
-            headers=headers,
-            data=json.dumps({
-                "shortPlayId": short_play_id,
-                "author": [author],
-                "status": "pending",
-                "provider": provider,
-                "created_at": _now_iso(),
-                "updated_at": _now_iso(),
-            }),
-            timeout=30,
-        )
-        post.raise_for_status()
-        result = post.json() if isinstance(post.json(), list) else []
-        return result[0] if result else {}
+
+    post = requests.post(
+        endpoint,
+        headers=headers,
+        data=json.dumps({
+            "shortPlayId": short_play_id,
+            "author": [author],
+            "status": "pending",
+            "provider": provider,
+            "created_at": _now_iso(),
+            "updated_at": _now_iso(),
+        }),
+        timeout=30,
+    )
+    post.raise_for_status()
+    result = post.json() if isinstance(post.json(), list) else []
+    return result[0] if result else {}
 
 
 def fetch_queue_requests(

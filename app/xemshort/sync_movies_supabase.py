@@ -490,10 +490,15 @@ def search_movies_supabase(supabase_url: str, supabase_key: str, query: str = ""
     headers["Prefer"] = "count=exact"
     offset = (page - 1) * page_size
     select_columns = "play_id,name,thumbnail,intro,label_list,search_text,search_text_ascii,created_at,synced_at"
-    if source in {DRAMAWAVE_SOURCE, XSHORT_SOURCE}:
+    if source == DRAMAWAVE_SOURCE:
         select_columns = (
             "play_id,name,thumbnail,intro,label_list,episode_count,"
             "search_text,search_text_ascii,source_api,created_at,synced_at"
+        )
+    elif source == XSHORT_SOURCE:
+        select_columns = (
+            "play_id,name,thumbnail,intro,label_list,episode_count,"
+            "search_text,search_text_ascii,source_api,raw,created_at,synced_at"
         )
     params = {
         "select": select_columns,

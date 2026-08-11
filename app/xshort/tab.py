@@ -6,14 +6,16 @@ difference is that search and episode detail are read from Supabase
 """
 from __future__ import annotations
 
+import json as _json
 import os
 import uuid
 from pathlib import Path
 
 import requests
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QSettings
 
+from xemshort.dialogs import XSEpisodePickerDialog
 from xemshort.helpers import _ns_parse_episodes
 from xemshort.models import XSEpisode, XSMovie
 from xemshort.movie_search_dialog import NetShortMovieSearchDialog
@@ -40,6 +42,85 @@ class XshortMovieSearchDialog(NetShortMovieSearchDialog):
     def __init__(self, parent=None):
         super().__init__(parent, source=XSHORT_SOURCE, source_name="Xshort")
 
+    def _movie_info_text(self, movie: dict) -> str:
+        """Basic fields + full raw JSON (includes banner/thumbnail links)."""
+        fields = [
+            ("name", movie.get("name")),
+            ("play_id", movie.get("play_id")),
+            ("thumbnail", movie.get("thumbnail")),
+            ("label_list", movie.get("label_list")),
+            ("episode_count", movie.get("episode_count")),
+            ("source_api", movie.get("source_api")),
+        ]
+        basic = "\n".join(f"{k}: {v or ''}" for k, v in fields)
+        raw = movie.get("raw")
+        if raw:
+            raw_str = _json.dumps(raw, ensure_ascii=False, indent=2)
+            return basic + "\n\n--- raw ---\n" + raw_str
+        return basic
+
+    def _show_movie_info(self) -> None:
+        if not self._selected_movie:
+            return
+        movie = self._selected_movie
+        raw = movie.get("raw") or {}
+        raw_text = _json.dumps(raw, ensure_ascii=False, indent=2)
+        full_text = self._movie_info_text(movie)
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle(f"Thông tin Xshort: {movie.get('name') or ''}")
+        dlg.resize(700, 520)
+        layout = QtWidgets.QVBoxLayout(dlg)
+
+        title = QtWidgets.QLabel(str(movie.get("name") or "Untitled"))
+        title.setWordWrap(True)
+        title.setStyleSheet("font-size:16px;font-weight:800;color:#111827;")
+        layout.addWidget(title)
+
+        info = QtWidgets.QPlainTextEdit()
+        info.setReadOnly(True)
+        info.setPlainText(full_text)
+        info.setStyleSheet("font-family:Consolas,monospace;font-size:11px;")
+        layout.addWidget(info, stretch=1)
+
+        row = QtWidgets.QHBoxLayout()
+
+        copy_raw_btn = QtWidgets.QPushButton("Copy Raw JSON")
+        copy_raw_btn.setStyleSheet(
+            "QPushButton { background:#7c3aed;color:white;font-weight:700;"
+            "padding:6px 14px;border-radius:6px; }"
+            "QPushButton:hover { background:#6d28d9; }"
+        )
+        copy_raw_btn.clicked.connect(lambda: self._copy_and_notify(raw_text, "Đã copy raw JSON"))
+        row.addWidget(copy_raw_btn)
+
+        copy_info_btn = QtWidgets.QPushButton("Copy Info")
+        copy_info_btn.setStyleSheet(
+            "QPushButton { background:#2563eb;color:white;font-weight:700;"
+            "padding:6px 14px;border-radius:6px; }"
+            "QPushButton:hover { background:#1d4ed8; }"
+        )
+        copy_info_btn.clicked.connect(lambda: self._copy_and_notify(full_text, "Đã copy info"))
+        row.addWidget(copy_info_btn)
+
+        row.addStretch()
+        close_btn = QtWidgets.QPushButton("Đóng")
+        close_btn.setStyleSheet(
+            "QPushButton { background:#374151;color:white;font-weight:700;"
+            "padding:6px 14px;border-radius:6px; }"
+            "QPushButton:hover { background:#4b5563; }"
+        )
+        close_btn.clicked.connect(dlg.close)
+        row.addWidget(close_btn)
+        layout.addLayout(row)
+        dlg.exec()
+
+    def _copy_and_notify(self, text: str, msg: str) -> None:
+        QtWidgets.QApplication.clipboard().setText(text)
+        QtWidgets.QToolTip.showText(
+            QtGui.QCursor.pos(), msg, None, QtCore.QRect(), 1500
+        )
+
 
 class XshortFetchFromSupabaseWorker(QtCore.QThread):
     """Fetch Xshort episodes from xshort_movies.detail_raw."""
@@ -47,6 +128,7 @@ class XshortFetchFromSupabaseWorker(QtCore.QThread):
     success = QtCore.Signal(list, str, str, int)
     error = QtCore.Signal(str, int)
     log_msg = QtCore.Signal(str, int)
+    movie_raw = QtCore.Signal(object, int)  # (raw dict, instance_id)
 
     def __init__(self, movie_id: str):
         super().__init__()
@@ -73,7 +155,7 @@ class XshortFetchFromSupabaseWorker(QtCore.QThread):
                 headers=headers,
                 params={
                     "play_id": f"eq.{self.movie_id}",
-                    "select": "play_id,name,episode_count,detail_raw,detail_synced_at",
+                    "select": "play_id,name,episode_count,raw,detail_raw,detail_synced_at",
                     "limit": "1",
                 },
                 timeout=30,
@@ -85,6 +167,9 @@ class XshortFetchFromSupabaseWorker(QtCore.QThread):
                 return
 
             row = rows[0]
+            movie_raw_data = row.get("raw") or {}
+            self.movie_raw.emit(movie_raw_data, self.instance_id)
+
             raw = row.get("detail_raw") or {}
             if not raw:
                 self.error.emit(
@@ -118,6 +203,84 @@ class XshortDownloadMergeWorker(DramaWaveDownloadMergeWorker):
     """Xshort uses HLS episode URLs like DramaWave, with Xshort error source."""
 
     subtitle_error_source = "xshort"
+
+
+class XshortEpisodePickerDialog(XSEpisodePickerDialog):
+    """Episode picker with movie raw info panel at the top for Xshort."""
+
+    def __init__(
+        self,
+        movie_name: str,
+        episodes: list,
+        parent=None,
+        source: str = "",
+        raw: dict | None = None,
+    ):
+        self._movie_raw = raw or {}
+        super().__init__(movie_name, episodes, parent, source)
+        if self._movie_raw:
+            self._insert_raw_panel()
+
+    def _insert_raw_panel(self) -> None:
+        raw_text = _json.dumps(self._movie_raw, ensure_ascii=False, indent=2)
+        layout = self.layout()
+
+        # Header toggle button
+        toggle_btn = QtWidgets.QPushButton("▶ Thông tin phim (raw) — nhấn để mở/đóng")
+        toggle_btn.setCheckable(True)
+        toggle_btn.setChecked(False)
+        toggle_btn.setStyleSheet(
+            "QPushButton { background:#1f2937;color:#d1d5db;font-weight:700;"
+            "padding:5px 10px;border-radius:4px;text-align:left; }"
+            "QPushButton:checked { background:#111827;color:#f9fafb; }"
+            "QPushButton:hover { background:#374151; }"
+        )
+
+        # Panel container (hidden by default)
+        panel = QtWidgets.QWidget()
+        panel.setVisible(False)
+        panel_layout = QtWidgets.QVBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 4, 0, 4)
+        panel_layout.setSpacing(4)
+
+        text_edit = QtWidgets.QPlainTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setPlainText(raw_text)
+        text_edit.setStyleSheet(
+            "QPlainTextEdit { font-family:Consolas,monospace;font-size:10px;"
+            "background:#0f172a;color:#e2e8f0;border:1px solid #334155;"
+            "border-radius:4px;padding:4px; }"
+        )
+        text_edit.setFixedHeight(160)
+        panel_layout.addWidget(text_edit)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        copy_raw_btn = QtWidgets.QPushButton("Copy Raw JSON")
+        copy_raw_btn.setStyleSheet(
+            "QPushButton { background:#7c3aed;color:white;font-weight:700;"
+            "padding:4px 12px;border-radius:4px; }"
+            "QPushButton:hover { background:#6d28d9; }"
+        )
+        copy_raw_btn.clicked.connect(lambda: self._copy_raw(raw_text))
+        btn_row.addWidget(copy_raw_btn)
+        btn_row.addStretch()
+        panel_layout.addLayout(btn_row)
+
+        toggle_btn.toggled.connect(panel.setVisible)
+        toggle_btn.toggled.connect(
+            lambda checked: toggle_btn.setText(
+                ("▼" if checked else "▶") + " Thông tin phim (raw) — nhấn để mở/đóng"
+            )
+        )
+
+        layout.insertWidget(0, toggle_btn)
+        layout.insertWidget(1, panel)
+
+    def _copy_raw(self, text: str) -> None:
+        QtWidgets.QApplication.clipboard().setText(text)
+        QtWidgets.QToolTip.showText(
+            QtGui.QCursor.pos(), "Đã copy raw JSON", None, QtCore.QRect(), 1500
+        )
 
 
 class XshortTab(XemShortTab):
@@ -188,6 +351,7 @@ class XshortTab(XemShortTab):
         worker.success.connect(self._ns_on_fetch_success)
         worker.error.connect(self._ns_on_fetch_error)
         worker.log_msg.connect(lambda msg, _: self._log(f"[DB] {msg}"))
+        worker.movie_raw.connect(self._on_movie_raw)
         worker.finished.connect(lambda: self.ns_fetch_db_btn.setEnabled(True))
         worker.finished.connect(lambda: self.ns_fetch_btn.setEnabled(True))
         worker.finished.connect(worker.deleteLater)
@@ -195,6 +359,10 @@ class XshortTab(XemShortTab):
             lambda w=worker: self._fetch_workers.remove(w) if w in self._fetch_workers else None
         )
         worker.start()
+
+    def _on_movie_raw(self, raw: dict, instance_id: int) -> None:
+        if instance_id == self._fetch_instance_id:
+            self._current_raw = raw
 
     def _ns_on_fetch_success(
         self,
@@ -209,6 +377,61 @@ class XshortTab(XemShortTab):
         self.ns_status.setText(f"Fetched Xshort {len(episodes)} tập.")
         self._log(f"Fetched Xshort {len(episodes)} tập.")
         self._ns_show_picker(episodes, name, movie_id)
+
+    def _ns_show_picker(self, episodes: list[XSEpisode], movie_name: str = "", movie_id: str = ""):
+        name = movie_name or (episodes[0].name if episodes else "Unknown")
+        raw = getattr(self, "_current_raw", {})
+        dlg = XshortEpisodePickerDialog(name, episodes, self, source=self._cache_source(), raw=raw)
+        if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return
+        selected = dlg.get_selected_episodes()
+        save_dir = Path(self.ns_save_dir_edit.text() or ".")
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Merge into existing movie row if same movie_id found
+        if movie_id:
+            for m in self.movies:
+                if m.movie_id == movie_id:
+                    new_eps: list[int] = []
+                    reset_eps: list[int] = []
+                    pending_eps: list[int] = []
+                    for ep in selected:
+                        existing = next((e for e in m.episodes if e.id == ep.id), None)
+                        if existing is None:
+                            ep.status = "pending"
+                            ep.merge_note = ""
+                            m.episodes.append(ep)
+                            new_eps.append(ep.episode)
+                        elif existing.status == "done":
+                            existing.status = "pending"
+                            reset_eps.append(existing.episode)
+                        else:
+                            pending_eps.append(existing.episode)
+                    if new_eps or reset_eps:
+                        self._ns_refresh_movie_row(m)
+                    parts = []
+                    if new_eps:
+                        eps_str = ", ".join(f"T{n}" for n in sorted(new_eps))
+                        parts.append(f"thêm mới {len(new_eps)} tập: {eps_str}")
+                    if reset_eps:
+                        eps_str = ", ".join(f"T{n}" for n in sorted(reset_eps))
+                        parts.append(f"reset {len(reset_eps)} tập đã done → pending: {eps_str}")
+                    if pending_eps and not new_eps and not reset_eps:
+                        eps_str = ", ".join(f"T{n}" for n in sorted(pending_eps))
+                        parts.append(f"{len(pending_eps)} tập đang xử lý: {eps_str}")
+                    self.ns_start_btn.setEnabled(True)
+                    self._log(f"'{m.name}': " + (" | ".join(parts) if parts else "không có thay đổi"))
+                    return
+
+        # New movie
+        for ep in selected:
+            ep.status = "pending"
+            ep.merge_note = ""
+        movie = XSMovie(name=name, episodes=selected, save_dir=save_dir, movie_id=movie_id)
+        self.movies.append(movie)
+        self._ns_add_movie_to_table(movie)
+        self.ns_start_btn.setEnabled(True)
+        self._log(f"Thêm '{name}' - {movie.selected_count}/{movie.total} tập.")
 
     def _create_download_worker(self, movie: XSMovie, **kwargs) -> XshortDownloadMergeWorker:
         return XshortDownloadMergeWorker(movie, **kwargs)

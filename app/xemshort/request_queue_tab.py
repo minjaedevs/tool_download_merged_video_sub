@@ -29,6 +29,7 @@ _REFRESH_MS   = 30_000   # 30s auto-refresh
 PROVIDERS: dict[str, str] = {
     "netshort":  "NetShort",
     "dramawave": "Dramaware",
+    "shortmax":  "ShortMax",
 }
 
 
@@ -1021,7 +1022,9 @@ class RequestQueueTab(QtWidgets.QWidget):
     def _on_submit_done(self, row: dict, provider: str) -> None:
         panel = self._panels[provider]
         panel["submit_btn"].setEnabled(True)
-        already_exists = bool(row and row.get("_already_exists"))
+        already_exists    = bool(row and row.get("_already_exists"))
+        already_completed = bool(row and row.get("_already_completed"))
+        reset_from_error  = bool(row and row.get("_reset_from_error"))
         short_play_id = panel["id_edit"].text().strip()
         panel["id_edit"].clear()
 
@@ -1037,14 +1040,43 @@ class RequestQueueTab(QtWidgets.QWidget):
                 "author": [self._username],
             }
 
-        status = row.get("status", "pending")
-        if already_exists:
-            message = f"ID {short_play_id} đã có trong hàng đợi {PROVIDERS[provider]}."
-            self._set_status(provider, message, self._tk.warning)
-            QtWidgets.QMessageBox.information(self, "ID đã tồn tại", message)
-            return
-        self._set_status(provider, f"Đã gửi — status: {status}", self._tk.success)
+        name = str(row.get("name") or "")
+        name_str = f' "{name}"' if name else ""
 
+        if already_completed:
+            msg = (
+                f"ID {short_play_id}{name_str} đã được crawl thành công rồi.\n"
+                "Dữ liệu đã có trong DB — không cần gửi lại."
+            )
+            self._set_status(provider, f"✓ {short_play_id} đã hoàn thành.", self._tk.success)
+            QtWidgets.QMessageBox.information(self, "Đã hoàn thành rồi", msg)
+            return
+
+        if reset_from_error:
+            msg = (
+                f"ID {short_play_id}{name_str} trước đó bị lỗi.\n"
+                "Đã reset về pending — sẽ được crawl lại trong lần tới."
+            )
+            self._set_status(provider, f"↺ Reset {short_play_id} → pending.", self._tk.warning)
+            QtWidgets.QMessageBox.information(self, "Reset về pending", msg)
+            self._insert_or_update_row(row, provider)
+            QtCore.QTimer.singleShot(800, lambda p=provider: self._force_refresh(p))
+            return
+
+        if already_exists:
+            status_existing = str(row.get("status") or "pending")
+            msg = (
+                f"ID {short_play_id} đã có trong hàng đợi {PROVIDERS[provider]}\n"
+                f"(status hiện tại: {status_existing})."
+            )
+            self._set_status(provider, msg, self._tk.warning)
+            QtWidgets.QMessageBox.information(self, "ID đã tồn tại", msg)
+            return
+
+        status = row.get("status", "pending")
+        msg = f"ID {short_play_id}{name_str} đã được gửi vào hàng đợi {PROVIDERS[provider]}.\nStatus: {status}"
+        self._set_status(provider, f"✅ Đã gửi {short_play_id}.", self._tk.success)
+        QtWidgets.QMessageBox.information(self, "Đã gửi yêu cầu", msg)
         self._insert_or_update_row(row, provider)
         QtCore.QTimer.singleShot(800, lambda p=provider: self._force_refresh(p))
 

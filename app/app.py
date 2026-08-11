@@ -22,6 +22,7 @@ from utils import BIN_DIR, ROOT, load_toml, save_toml
 from update_version import Updater
 from xemshort import DramaWaveTab, MovieManagerTab, RequestQueueTab, XemShortTab
 from xshort import XshortTab
+from shortmax import ShortMaxTab
 from phimngan import PhimNganTab
 from mp4tom3u8 import Mp4ToM3U8Tab
 from m3u8.m3utab import M3U8ProTab, M3U8Tab
@@ -83,6 +84,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Tab: Xshort downloader
         xshort_tab = XshortTab()
         tab_widget.addTab(xshort_tab, "Xshort")
+
+        # Tab: ShortMax downloader (video has embedded subs, no merge needed)
+        shortmax_tab = ShortMaxTab()
+        tab_widget.addTab(shortmax_tab, "ShortMax")
 
         # Tab 2: DramaWave
         dramawave_tab = DramaWaveTab()
