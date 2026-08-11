@@ -248,6 +248,11 @@ class ShortMaxTab(XemShortTab):
         self._log(f"Fetched ShortMax {len(episodes)} tập.")
         self._ns_show_picker(episodes, name, movie_id)
 
+    def _ns_update_row_btns(self, movie) -> None:
+        super()._ns_update_row_btns(movie)
+        if hasattr(movie, "openMerged_btn"):
+            movie.openMerged_btn.hide()
+
     def _create_download_worker(self, movie: XSMovie, **kwargs) -> ShortMaxDownloadWorker:
         # Force no sub download and no merge — video already has embedded subs
         kwargs["download_sub"] = False
