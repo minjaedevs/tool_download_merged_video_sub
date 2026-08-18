@@ -12,6 +12,7 @@ import time
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urljoin
@@ -469,6 +470,17 @@ class XSDownloadMergeWorker(QtCore.QThread):
             self.log(f"SKIP {desc} (đã tồn tại)")
             return True
 
+        def _expired_signed_url_note(raw_url: str) -> str:
+            match = re.search(r"[?&]Expires=(\d+)", raw_url or "")
+            if not match:
+                return ""
+            expires_ts = int(match.group(1))
+            now_ts = int(datetime.now(timezone.utc).timestamp())
+            expires_at = datetime.fromtimestamp(expires_ts, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            if expires_ts <= now_ts:
+                return f"URL signed da het han tu {expires_at}; can crawl lai phim de lay URL moi"
+            return f"URL signed expires {expires_at}"
+
         tmp = output.with_suffix(output.suffix + ".part")
         for attempt in range(1, retries + 1):
             if self._stop.is_set():
@@ -490,6 +502,12 @@ class XSDownloadMergeWorker(QtCore.QThread):
                 return True
             except requests.exceptions.Timeout:
                 self.log(f"TIMEOUT {desc} (thử {attempt}/{retries})")
+            except requests.exceptions.HTTPError as e:
+                note = _expired_signed_url_note(url)
+                if note:
+                    self.log(f"LOI {desc} (thu {attempt}/{retries}): {e} - {note}")
+                else:
+                    self.log(f"LOI {desc} (thu {attempt}/{retries}): {e}")
             except requests.exceptions.ConnectionError as e:
                 self.log(f"LỖI {desc} (thử {attempt}/{retries}): {e}")
             except Exception as e:
@@ -1162,8 +1180,6 @@ class DramaWaveDownloadMergeWorker(XSDownloadMergeWorker):
             "-loglevel", "warning",
             "-protocol_whitelist", "file,http,https,tcp,tls,crypto,data",
             "-allowed_extensions", "ALL",
-            "-allowed_segment_extensions", "ALL",
-            "-extension_picky", "0",
             "-i", str(playlist_tmp),
             "-map", "0:v:0?",
             "-map", "0:a:0?",
