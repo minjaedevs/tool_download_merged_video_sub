@@ -1178,6 +1178,7 @@ class DramaWaveDownloadMergeWorker(XSDownloadMergeWorker):
             str(ffmpeg_path),
             "-y",
             "-loglevel", "warning",
+            "-fflags", "+genpts",
             "-protocol_whitelist", "file,http,https,tcp,tls,crypto,data",
             "-allowed_extensions", "ALL",
             "-i", str(playlist_tmp),
@@ -1185,6 +1186,7 @@ class DramaWaveDownloadMergeWorker(XSDownloadMergeWorker):
             "-map", "0:a:0?",
             "-c", "copy",
             "-bsf:a", "aac_adtstoasc",
+            "-avoid_negative_ts", "make_zero",
             str(tmp),
         ]
         try:
