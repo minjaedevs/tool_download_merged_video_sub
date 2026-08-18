@@ -182,9 +182,8 @@ class XshortFetchFromSupabaseWorker(QtCore.QThread):
             movie_name = str(row.get("name") or "")
             episodes = _ns_parse_episodes(raw, movie_name)
             for ep in episodes:
-                # Same lock rule as NetShort: missing video or subtitle means
-                # the episode cannot be selected/downloaded.
-                ep.is_locked = not ep.play or not ep.subtitle_url
+                # Missing subtitles should not block video downloads.
+                ep.is_locked = not ep.play
 
             if not episodes:
                 self.error.emit(f"Không parse được tập nào từ {_TABLE}.detail_raw.", self.instance_id)
